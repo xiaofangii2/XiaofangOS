@@ -38,7 +38,8 @@ com.xiaofang.os/
 - 现代浏览器（Via、火狐、夸克、Chrome 等）
 
 ## 安装
-curl -fsSL https://github.com/xiaofangii2/XiaofangOS/releases/download/v1.0.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/xiaofangii2/XiaofangOS/main/install.sh -o install.sh
+bash install.sh
 ## 版本规则
 
 - 不存在 → 安装
