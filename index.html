@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title></title>
+    <!-- 方式一：HTML 元标签跳转（0 秒后立即跳转） -->
+    <meta http-equiv="refresh" content="0; url=XiaofangOS.html">
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0f1115;
+        }
+        .spinner {
+            width: 36px;
+            height: 36px;
+            border: 3px solid rgba(255,255,255,.15);
+            border-top-color: #4f8cff;
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="spinner"></div>
+
+    <!-- 方式二：JavaScript 跳转（更可靠，replace 不留下历史记录） -->
+    <script>
+        window.location.replace("XiaofangOS.html");
+    </script>
+</body>
+</html>
