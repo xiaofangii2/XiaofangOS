@@ -16,7 +16,7 @@
 - 壁纸自动读取 `.config/background/wallpaper.{jpg,png,svg,xml,webp}`
 
 ## 已知已知bug
-#1  电源无法正确突出
+目前已知完全修复
 ## 目录结构
 com.xiaofang.os/
 ├── XiaofangOS.html
@@ -37,9 +37,11 @@ com.xiaofang.os/
 ## 环境要求
 
 - 安卓手机
-- Termux
+- Termux (技术高点的可以修改mt管理器终端扩展包装上所需的PHP,Unizip,并且在安装脚本中删除环境检测可在mt管理器运行)
 - PHP 8.0 以上
 - 现代浏览器（Via、火狐、夸克、Chrome 等）
+- 支持本地的浏览器都行
+- 技术高点的可以修改mt管理器终端扩展包装上所需的PHP,Unizip,并且在安装脚本中删除环境检测可在mt管理器运行
 
 ## 安装
 curl -fsSL https://raw.githubusercontent.com/xiaofangii2/XiaofangOS/main/install.sh -o install.sh
@@ -60,3 +62,24 @@ CC BY-NC-SA 4.0
 - 修改后必须同协议开源
 
 详见 `LICENSE`。
+
+#### 许可协议
+
+CC BY-NC-SA 4.0
+
+- 自由使用、修改、分发
+- 禁止商业使用
+- 修改后必须同协议开源
+
+详见 `LICENSE`。
+###### 许可协议
+
+CC BY-NC-SA 4.0
+
+- 自由使用、修改、分发
+- 禁止商业使用
+- 修改后必须同协议开源
+
+详见 `LICENSE`。
+
+#重要的事情说三遍

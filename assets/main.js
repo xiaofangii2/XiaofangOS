@@ -6,7 +6,10 @@ const DESKTOP='/Ubuntu/root/Desktop/';
 const RECYCLE='/recycle-bin/';
 const BG_DIR='/.config/background/';
 const APP_DIR='/Ubuntu/mnt/data/';
+const LANG_DIR='/assets/lang/';
 const BOOT_COOKIE='xiaofang_booted';
+const LANG_STORAGE='xiaofang_lang';
+const PIN_STORAGE='xiaofang_pinned';
 const bootScreen=document.getElementById('bootScreen');
 const bootText=document.getElementById('bootText');
 const bootSpinner=document.getElementById('bootSpinner');
@@ -24,15 +27,62 @@ const dialogTitle=document.getElementById('dialogTitle');
 const dialogBody=document.getElementById('dialogBody');
 const dialogFooter=document.getElementById('dialogFooter');
 const toastEl=document.getElementById('toast');
+const startPinnedSection=document.getElementById('startPinnedSection');
 let windowZIndex=200;
 const windows=new Map();
 let nextWindowId=1;
 const installedApps=[];
-const appConfig={pc:{title:'此电脑',icon:'pc',path:DESKTOP,root:UBUNTU},recycle:{title:'回收站',icon:'recycle',path:RECYCLE,root:RECYCLE}};
+const appConfig={pc:{titleKey:'desktop.computer',icon:'pc',path:DESKTOP,root:UBUNTU},recycle:{titleKey:'desktop.recycle',icon:'recycle',path:RECYCLE,root:RECYCLE}};
 let selectionMode=false;
 const selectedPaths=new Set();
 let dragState=null;
 let suppressNextClick=false;
+let LANG={};
+let currentLang='zh-CN';
+let pinnedApps=[];
+try{pinnedApps=JSON.parse(localStorage.getItem(PIN_STORAGE)||'[]')||[];}catch(e){pinnedApps=[];}
+function t(key,params){
+let s=LANG[key]||key;
+if(params){
+Object.keys(params).forEach(function(k){
+s=s.replace(new RegExp('\\{'+k+'\\}','g'),params[k]);
+});
+}
+return s;
+}
+function detectDefaultLang(){
+const nav=(navigator.language||'zh-CN').toLowerCase();
+if(nav.indexOf('zh')===0)return 'zh-CN';
+if(nav.indexOf('ja')===0)return 'ja-JP';
+return 'en-US';
+}
+function loadLang(code){
+return fetch(LANG_DIR+code+'.json?_t='+Date.now()).then(function(r){
+if(!r.ok)throw new Error('lang not found');
+return r.json();
+}).then(function(data){
+LANG=data;
+currentLang=code;
+document.documentElement.lang=code;
+localStorage.setItem(LANG_STORAGE,code);
+window.XiaofangI18N=LANG;
+applyI18n();
+}).catch(function(){
+if(code!=='en-US')return loadLang('en-US');
+});
+}
+function applyI18n(){
+document.querySelectorAll('[data-i18n]').forEach(function(el){
+const key=el.getAttribute('data-i18n');
+el.textContent=t(key);
+});
+document.querySelectorAll('[data-i18n-title]').forEach(function(el){
+const key=el.getAttribute('data-i18n-title');
+el.setAttribute('title',t(key));
+});
+const titleEl=document.querySelector('title');
+if(titleEl)titleEl.textContent=t('app.name');
+}
 function getCookie(name){
 const match=document.cookie.match(new RegExp('(?:^|; )'+name.replace(/([.*+?^${}()|[\]\\])/g,'\\$1')+'=([^;]*)'));
 return match?decodeURIComponent(match[1]):null;
@@ -51,7 +101,7 @@ toastEl._t=setTimeout(function(){toastEl.classList.remove('show')},dur||2000);
 }
 function closeDialog(){dialogOverlay.classList.remove('open');dialogBody.innerHTML='';dialogFooter.innerHTML=''}
 function showDialog(opts){
-dialogTitle.textContent=opts.title||'提示';
+dialogTitle.textContent=opts.title||'';
 dialogBody.innerHTML='';
 if(opts.html){
 dialogBody.innerHTML=opts.html;
@@ -59,13 +109,20 @@ dialogBody.innerHTML=opts.html;
 if(opts.message){const p=document.createElement('p');p.textContent=opts.message;dialogBody.appendChild(p)}
 if(opts.input!==undefined){
 const inp=document.createElement('input');
-inp.type='text';inp.value=opts.input;inp.id='dialogInput';
+inp.type='text';
+inp.value=opts.input;
+inp.id='dialogInput';
+inp.setAttribute('autocomplete','off');
+inp.setAttribute('autocorrect','off');
+inp.setAttribute('autocapitalize','off');
+inp.setAttribute('spellcheck','false');
+inp.style.webkitUserSelect='text';
+inp.style.userSelect='text';
 dialogBody.appendChild(inp);
-setTimeout(function(){inp.focus();inp.select()},50);
 }
 }
 dialogFooter.innerHTML='';
-(opts.buttons||[{text:'确定',primary:true}]).forEach(function(b){
+(opts.buttons||[{text:t('btn.ok'),primary:true}]).forEach(function(b){
 const btn=document.createElement('button');
 btn.className='dialog-btn'+(b.primary?' primary':'')+(b.danger?' danger':'');
 btn.textContent=b.text;
@@ -76,6 +133,10 @@ if(b.onClick)b.onClick(inp?inp.value:null);else closeDialog();
 dialogFooter.appendChild(btn);
 });
 dialogOverlay.classList.add('open');
+const inp=document.getElementById('dialogInput');
+if(inp){
+setTimeout(function(){try{inp.focus();inp.select()}catch(e){}},80);
+}
 }
 function api(action,data){
 return fetch('/api.php?action='+action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)}).then(function(r){return r.json()});
@@ -97,14 +158,14 @@ function runBootSequence(callback){
 const booted=getCookie(BOOT_COOKIE);
 if(booted==='restarted'){
 bootSpinner.classList.add('show');
-bootText.textContent='正在重启...';
+bootText.textContent=t('boot.restarting');
 setTimeout(function(){
-bootText.textContent='XiaofangOS';
+bootText.textContent=t('app.name');
 bootSpinner.classList.remove('show');
 setTimeout(function(){setCookie(BOOT_COOKIE,'yes',365);finishBoot(callback)},1200);
 },1000);
 }else{
-bootText.textContent='XiaofangOS';
+bootText.textContent=t('app.name');
 setTimeout(function(){setCookie(BOOT_COOKIE,'yes',365);finishBoot(callback)},2600);
 }
 }
@@ -204,7 +265,12 @@ const dup=installedApps.some(function(x){return x.id===a.id});
 if(!dup)installedApps.push(a);
 });
 renderAppIcons();
+renderStartPinned();
 });
+}
+function isPointOverElement(x,y,el){
+const r=el.getBoundingClientRect();
+return x>=r.left && x<=r.right && y>=r.top && y<=r.bottom;
 }
 function attachDragHandlers(el,relPath,name,isDir,source,ctxOptions){
 let longPressMenu=null;
@@ -212,6 +278,7 @@ let longPressSelect=null;
 let dragging=false;
 let startX=0,startY=0;
 let movedEnough=false;
+let startedOnEl=false;
 function getPoint(e){
 if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
 return{x:e.clientX,y:e.clientY};
@@ -236,6 +303,7 @@ if(dragging)return;
 const p=getPoint(e);
 startX=p.x;startY=p.y;
 movedEnough=false;
+startedOnEl=true;
 cleanupTimers();
 longPressMenu=setTimeout(function(){
 longPressMenu=null;
@@ -261,10 +329,19 @@ toggleSelect(relPath,el);
 }
 function onMove(e){
 if(selectionMode)return;
+if(!startedOnEl)return;
 if(dragging&&!dragState)return;
 const p=getPoint(e);
 const dx=Math.abs(p.x-startX);
 const dy=Math.abs(p.y-startY);
+if(!dragging&&(dx>8||dy>8)){
+if(!isPointOverElement(p.x,p.y,el)){
+cleanupTimers();
+startedOnEl=false;
+setTimeout(function(){suppressNextClick=false},50);
+return;
+}
+}
 if(dx>8||dy>8){
 movedEnough=true;
 if(longPressMenu){clearTimeout(longPressMenu);longPressMenu=null}
@@ -283,6 +360,11 @@ highlightDropTarget(p.x,p.y);
 }
 }
 function onEnd(e){
+if(!startedOnEl){
+cleanupTimers();
+setTimeout(function(){suppressNextClick=false},50);
+return;
+}
 if(!dragging){
 cleanupTimers();
 setTimeout(function(){suppressNextClick=false},50);
@@ -336,16 +418,16 @@ if(!dragState)return;
 let dst=target.path;
 if(dst===dragState.source)return;
 const srcParent=dragState.relPath.replace(/\/[^\/]*$/,'');
-if(dst===srcParent){toast('已在目标目录');return}
+if(dst===srcParent){toast(t('msg.same_dir'));return}
 const srcs=[dragState.relPath];
-toast('正在移动...');
+toast(t('msg.moving'));
 api('move',{srcs:srcs,dst:dst}).then(function(r){
 if(r.ok&&r.results&&r.results[0]&&r.results[0].ok){
-toast('已移动');
+toast(t('msg.moved'));
 renderDesktopIcons();
 refreshWindows();
 }else{
-toast('移动失败：'+((r.results&&r.results[0]&&r.results[0].err)||r.error||'未知'));
+toast(t('msg.move_failed'));
 }
 });
 }
@@ -402,19 +484,72 @@ if(now-lastTap<300){if(timer){clearTimeout(timer);timer=null}doOpen();lastTap=0}
 else{lastTap=now;timer=setTimeout(function(){if(suppressNextClick){timer=null;return}doOpen();timer=null},250)}
 },{passive:false});
 attachDragHandlers(icon,'',app.name,false,'app',function(x,y){
-showContextMenu(x,y,[
-{text:'打开',onClick:function(){openAppWindow(app)}},
-{sep:true},
-{text:'卸载',danger:true,onClick:function(){confirmUninstallApp(app)}}
-]);
+const isPinned=pinnedApps.indexOf(app.id)>=0;
+const items=[
+{text:t('ctx.open'),onClick:function(){openAppWindow(app)}},
+{sep:true}
+];
+if(isPinned){
+items.push({text:t('ctx.unpin_start')||'从开始菜单取消固定',onClick:function(){
+pinnedApps=pinnedApps.filter(function(x){return x!==app.id});
+localStorage.setItem(PIN_STORAGE,JSON.stringify(pinnedApps));
+renderStartPinned();
+toast(t('msg.unpinned')||'已取消固定');
+}});
+}else{
+items.push({text:t('ctx.pin_start')||'固定到开始菜单',onClick:function(){
+if(pinnedApps.indexOf(app.id)<0)pinnedApps.push(app.id);
+localStorage.setItem(PIN_STORAGE,JSON.stringify(pinnedApps));
+renderStartPinned();
+toast(t('msg.pinned')||'已固定到开始菜单');
+}});
+}
+items.push({text:t('ctx.uninstall'),danger:true,onClick:function(){confirmUninstallApp(app)}});
+showContextMenu(x,y,items);
 });
 desktopIcons.appendChild(icon);
 });
 }
+function renderStartPinned(){
+if(!startPinnedSection)return;
+startPinnedSection.innerHTML='';
+if(!pinnedApps.length)return;
+const sep=document.createElement('div');
+sep.className='start-sep';
+startPinnedSection.appendChild(sep);
+const title=document.createElement('div');
+title.className='start-section-title';
+title.textContent=t('start.pinned')||'已固定';
+startPinnedSection.appendChild(title);
+pinnedApps.forEach(function(appId){
+const app=installedApps.find(function(a){return a.id===appId});
+if(!app)return;
+const item=document.createElement('div');
+item.className='start-item';
+const iconWrap=document.createElement('div');
+iconWrap.className='start-item-icon';
+if(app.icon){
+const img=document.createElement('img');
+img.src=app.icon;
+iconWrap.appendChild(img);
+}else{
+iconWrap.innerHTML='<div style="width:20px;height:20px;background:linear-gradient(135deg,#6ab0e0,#2c6a9c);border-radius:3px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700">'+app.name.charAt(0).toUpperCase()+'</div>';
+}
+const label=document.createElement('span');
+label.textContent=app.name;
+item.appendChild(iconWrap);
+item.appendChild(label);
+item.addEventListener('click',function(){
+openAppWindow(app);
+startMenu.classList.remove('open');
+});
+startPinnedSection.appendChild(item);
+});
+}
 function confirmUninstallApp(app){
-showDialog({title:'卸载应用',message:'确定要删除 "'+app.name+'" 吗？',buttons:[
-{text:'取消',onClick:closeDialog},
-{text:'卸载',danger:true,onClick:function(){
+showDialog({title:t('dlg.uninstall_title'),message:t('msg.uninstall_app',{name:app.name}),buttons:[
+{text:t('btn.cancel'),onClick:closeDialog},
+{text:t('ctx.uninstall'),danger:true,onClick:function(){
 closeDialog();
 doUninstallApp(app);
 }}
@@ -423,11 +558,13 @@ doUninstallApp(app);
 function doUninstallApp(app){
 api('delete',{target:'Ubuntu/mnt/data/'+app.file}).then(function(r){
 if(r.ok){
-toast('已卸载');
+toast(t('msg.uninstalled'));
 closeWindowsByAppId(app.id);
+pinnedApps=pinnedApps.filter(function(x){return x!==app.id});
+localStorage.setItem(PIN_STORAGE,JSON.stringify(pinnedApps));
 refreshApps();
 }else{
-toast('失败：'+(r.error||''));
+toast(t('msg.failed'));
 }
 });
 }
@@ -443,16 +580,21 @@ toClose.forEach(function(winId){closeWindow(winId)});
 function renderDesktopIcons(){
 readDir(HOME).then(function(items){
 items.sort(function(a,b){if(a.isDir!==b.isDir)return a.isDir?-1:1;return a.name.localeCompare(b.name)});
-const old=desktopIcons.querySelectorAll('.icon[data-from-home]');
-old.forEach(function(el){el.remove()});
-if(!items.length){
-return;
-}
+const existing={};
+desktopIcons.querySelectorAll('.icon[data-from-home]').forEach(function(el){
+const name=el.getAttribute('data-rel-path').replace(/^home\//,'');
+existing[name]=el;
+});
+const keepNames=new Set();
 items.forEach(function(f){
-const icon=document.createElement('div');
+keepNames.add(f.name);
+const relPath='home/'+f.name;
+let icon=existing[f.name];
+if(!icon){
+icon=document.createElement('div');
 icon.className='icon';
 icon.setAttribute('data-from-home','1');
-icon.setAttribute('data-rel-path','home/'+f.name);
+icon.setAttribute('data-rel-path',relPath);
 const g=document.createElement('div');
 g.className='icon-graphic';
 if(f.isDir){
@@ -472,11 +614,6 @@ const checkbox=document.createElement('div');
 checkbox.className='icon-checkbox';
 checkbox.innerHTML='✓';
 icon.appendChild(checkbox);
-const relPath='home/'+f.name;
-if(selectionMode){
-checkbox.classList.add('show');
-if(selectedPaths.has(relPath))icon.classList.add('selected');
-}
 let timer=null,lastTap=0;
 function doOpen(){
 if(selectionMode){toggleSelect(relPath,icon);return}
@@ -502,7 +639,26 @@ if(f.isDir)icon.setAttribute('data-drop-path',relPath);
 attachDragHandlers(icon,relPath,f.name,f.isDir,'home',function(x,y){
 showItemContextMenu(x,y,relPath,f.name,f.isDir,false);
 });
-desktopIcons.appendChild(icon);
+}
+const checkbox=icon.querySelector('.icon-checkbox');
+if(selectionMode){
+checkbox.classList.add('show');
+if(selectedPaths.has(relPath))icon.classList.add('selected');
+else icon.classList.remove('selected');
+}else{
+checkbox.classList.remove('show');
+icon.classList.remove('selected');
+}
+});
+Object.keys(existing).forEach(function(name){
+if(!keepNames.has(name)){
+existing[name].remove();
+}
+});
+items.forEach(function(f){
+const relPath='home/'+f.name;
+const el=desktopIcons.querySelector('.icon[data-rel-path="'+relPath.replace(/"/g,'\\"')+'"]');
+if(el)desktopIcons.appendChild(el);
 });
 }).catch(function(err){console.warn('桌面读取失败',err)});
 }
@@ -543,10 +699,10 @@ const bar=document.createElement('div');
 bar.className='sel-toolbar';
 const cnt=document.createElement('span');
 cnt.className='sel-count';
-cnt.textContent='已选 '+selectedPaths.size+' 项';
+cnt.textContent=t('sel.selected',{n:selectedPaths.size});
 bar.appendChild(cnt);
 const btnAll=document.createElement('button');
-btnAll.textContent='全选';
+btnAll.textContent=t('sel.select_all');
 btnAll.addEventListener('click',function(){
 document.querySelectorAll('.icon[data-from-home]').forEach(function(el){
 const rel=el.getAttribute('data-rel-path');
@@ -559,32 +715,32 @@ updateSelectionUI();
 });
 bar.appendChild(btnAll);
 const btnCancel=document.createElement('button');
-btnCancel.textContent='取消';
+btnCancel.textContent=t('btn.cancel');
 btnCancel.addEventListener('click',exitSelectionMode);
 bar.appendChild(btnCancel);
 const btnMove=document.createElement('button');
-btnMove.textContent='移动';
+btnMove.textContent=t('sel.move');
 btnMove.addEventListener('click',function(){
-if(!selectedPaths.size){toast('未选择任何项');return}
-pickFolder('选择目标文件夹',function(dst){
+if(!selectedPaths.size)return;
+pickFolder(t('dlg.pick_folder_title'),function(dst){
 if(!dst)return;
 const srcs=Array.from(selectedPaths);
-toast('正在移动...');
+toast(t('msg.moving'));
 api('move',{srcs:srcs,dst:dst}).then(function(r){
-if(r.ok){toast('已移动');exitSelectionMode();renderDesktopIcons();refreshWindows()}
-else{toast('移动失败')}
+if(r.ok){toast(t('msg.moved'));exitSelectionMode();renderDesktopIcons();refreshWindows()}
+else{toast(t('msg.move_failed'))}
 });
 });
 });
 bar.appendChild(btnMove);
 const btnDel=document.createElement('button');
 btnDel.className='danger';
-btnDel.textContent='删除';
+btnDel.textContent=t('sel.delete');
 btnDel.addEventListener('click',function(){
-if(!selectedPaths.size){toast('未选择任何项');return}
-showDialog({title:'批量删除',message:'确定要将选中的 '+selectedPaths.size+' 项移到回收站吗？',buttons:[
-{text:'取消',onClick:closeDialog},
-{text:'删除',danger:true,onClick:function(){
+if(!selectedPaths.size)return;
+showDialog({title:t('dlg.batch_delete_title'),message:t('msg.batch_delete',{n:selectedPaths.size}),buttons:[
+{text:t('btn.cancel'),onClick:closeDialog},
+{text:t('ctx.delete'),danger:true,onClick:function(){
 closeDialog();
 const srcs=Array.from(selectedPaths);
 let done=0;
@@ -592,7 +748,7 @@ srcs.forEach(function(s){
 api('trash',{target:s}).then(function(){
 done++;
 if(done===srcs.length){
-toast('已移入回收站');
+toast(t('msg.deleted_to_trash'));
 exitSelectionMode();
 renderDesktopIcons();
 refreshWindows();
@@ -613,13 +769,14 @@ winEl.className='window';
 const p=getCenterPosition(640);
 winEl.style.left=p.left+'px';
 winEl.style.top=p.top+'px';
-winEl.style.width='640px';
+winEl.style.width=Math.min(640,window.innerWidth-20)+'px';
+winEl.style.height=Math.min(480,window.innerHeight-140)+'px';
 winEl.style.zIndex=++windowZIndex;
 const titleBar=document.createElement('div');
 titleBar.className='window-titlebar';
 const titleDiv=document.createElement('div');
 titleDiv.className='window-title';
-titleDiv.innerHTML='<span class="title-icon"></span><span>XiaofangOS - '+name+'</span>';
+titleDiv.innerHTML='<span class="title-icon"></span><span>'+t('app.name')+' - '+name+'</span>';
 const controls=document.createElement('div');
 controls.className='window-controls';
 const closeBtn=document.createElement('button');
@@ -632,12 +789,12 @@ const contentEl=document.createElement('div');
 contentEl.className='window-content preview-content';
 const fileUrl='/'+relPath.split('/').map(function(s){return encodeURIComponent(s)}).join('/');
 if(isTextFile(name)){
-contentEl.innerHTML='<div class="preview-text">正在加载...</div>';
+contentEl.innerHTML='<div class="preview-text">'+t('preview.loading')+'</div>';
 api('read',{path:relPath}).then(function(r){
 const pre=contentEl.querySelector('.preview-text');
-if(r.ok){pre.textContent=r.content||'（空文件）'}
-else{pre.textContent='读取失败：'+(r.error||'')}
-}).catch(function(){contentEl.innerHTML='<div class="preview-unknown">读取失败</div>'});
+if(r.ok){pre.textContent=r.content||''}
+else{pre.textContent=t('preview.failed')}
+}).catch(function(){contentEl.innerHTML='<div class="preview-unknown">'+t('preview.failed')+'</div>'});
 }else if(isImageFile(name)){
 contentEl.innerHTML='<div class="preview-wrap"><img src="'+fileUrl+'" alt=""></div>';
 }else if(isAudioFile(name)){
@@ -645,11 +802,14 @@ contentEl.innerHTML='<div class="preview-wrap"><audio controls autoplay src="'+f
 }else if(isVideoFile(name)){
 contentEl.innerHTML='<div class="preview-wrap"><video controls autoplay src="'+fileUrl+'"></video></div>';
 }else{
-contentEl.innerHTML='<div class="preview-unknown">无法预览此文件<div>'+name+'</div></div>';
+contentEl.innerHTML='<div class="preview-unknown">'+t('preview.unknown')+'<div>'+name+'</div></div>';
 }
-winEl.appendChild(titleBar);winEl.appendChild(contentEl);
+const resizeHandle=document.createElement('div');
+resizeHandle.className='window-resize';
+winEl.appendChild(titleBar);winEl.appendChild(contentEl);winEl.appendChild(resizeHandle);
 windowsLayer.appendChild(winEl);
 makeDraggable(winEl,titleBar);
+makeResizable(winEl,resizeHandle);
 winEl.addEventListener('mousedown',function(){winEl.style.zIndex=++windowZIndex;focusWindow(winId)});
 const taskbarBtn=document.createElement('button');
 taskbarBtn.className='taskbar-btn active';
@@ -664,18 +824,21 @@ const winId='app-'+app.id+'-'+nextWindowId++;
 const winEl=document.createElement('div');
 winEl.className='window';
 const p=getCenterPosition(720);
+const winW=Math.min(720,window.innerWidth-20);
+const winH=Math.min(520,window.innerHeight-140);
 winEl.style.left=p.left+'px';
 winEl.style.top=p.top+'px';
-winEl.style.width='720px';
+winEl.style.width=winW+'px';
+winEl.style.height=winH+'px';
 winEl.style.zIndex=++windowZIndex;
 const titleBar=document.createElement('div');
 titleBar.className='window-titlebar';
 const titleDiv=document.createElement('div');
 titleDiv.className='window-title';
 if(app.icon){
-titleDiv.innerHTML='<span class="title-icon"><img src="'+app.icon+'"></span><span>XiaofangOS - '+app.name+'</span>';
+titleDiv.innerHTML='<span class="title-icon"><img src="'+app.icon+'"></span><span>'+t('app.name')+' - '+app.name+'</span>';
 }else{
-titleDiv.innerHTML='<span class="title-icon"></span><span>XiaofangOS - '+app.name+'</span>';
+titleDiv.innerHTML='<span class="title-icon"></span><span>'+t('app.name')+' - '+app.name+'</span>';
 }
 const controls=document.createElement('div');
 controls.className='window-controls';
@@ -691,9 +854,12 @@ const iframe=document.createElement('iframe');
 iframe.setAttribute('sandbox','allow-scripts allow-forms allow-modals allow-popups allow-same-origin');
 iframe.srcdoc=app.htmlContent;
 contentEl.appendChild(iframe);
-winEl.appendChild(titleBar);winEl.appendChild(contentEl);
+const resizeHandle=document.createElement('div');
+resizeHandle.className='window-resize';
+winEl.appendChild(titleBar);winEl.appendChild(contentEl);winEl.appendChild(resizeHandle);
 windowsLayer.appendChild(winEl);
 makeDraggable(winEl,titleBar);
+makeResizable(winEl,resizeHandle);
 winEl.addEventListener('mousedown',function(){winEl.style.zIndex=++windowZIndex;focusWindow(winId)});
 const taskbarBtn=document.createElement('button');
 taskbarBtn.className='taskbar-btn active';
@@ -712,15 +878,18 @@ const winId='txt-'+nextWindowId++;
 const winEl=document.createElement('div');
 winEl.className='window';
 const p=getCenterPosition(600);
+const winW=Math.min(600,window.innerWidth-20);
+const winH=Math.min(500,window.innerHeight-140);
 winEl.style.left=p.left+'px';
 winEl.style.top=p.top+'px';
-winEl.style.width='600px';
+winEl.style.width=winW+'px';
+winEl.style.height=winH+'px';
 winEl.style.zIndex=++windowZIndex;
 const titleBar=document.createElement('div');
 titleBar.className='window-titlebar';
 const titleDiv=document.createElement('div');
 titleDiv.className='window-title';
-titleDiv.innerHTML='<span class="title-icon"></span><span>XiaofangOS - '+fileName+'</span>';
+titleDiv.innerHTML='<span class="title-icon"></span><span>'+t('win.texteditor')+' - '+fileName+'</span>';
 const controls=document.createElement('div');
 controls.className='window-controls';
 const closeBtn=document.createElement('button');
@@ -731,10 +900,14 @@ controls.appendChild(closeBtn);
 titleBar.appendChild(titleDiv);titleBar.appendChild(controls);
 const contentEl=document.createElement('div');
 contentEl.className='window-content app-content';
-contentEl.innerHTML='<div style="height:100%;display:flex;flex-direction:column;background:#f5f7fa"><div style="background:linear-gradient(180deg,#e6edf7,#d3deec);padding:10px 14px;display:flex;gap:8px;border-bottom:1px solid #b8c8da"><button id="txtBtnSave" style="padding:6px 14px;border-radius:6px;border:1px solid #3a8eef;background:#4a9eff;color:#fff;font-size:13px;cursor:pointer;font-family:inherit">保存</button><button id="txtBtnClear" style="padding:6px 14px;border-radius:6px;border:1px solid #b8c8da;background:#f0f4fa;color:#1e2b3a;font-size:13px;cursor:pointer;font-family:inherit">清空</button><span id="txtStatus" style="margin-left:auto;font-size:12px;color:#5b6f82;align-self:center"></span></div><textarea id="txtEditor" style="flex:1;padding:16px;border:none;outline:none;resize:none;font-size:15px;line-height:1.6;background:#fff;color:#1e2b3a;font-family:Consolas,Monaco,monospace"></textarea></div>';
-winEl.appendChild(titleBar);winEl.appendChild(contentEl);
+contentEl.style.padding='0';
+contentEl.innerHTML='<div style="height:100%;display:flex;flex-direction:column;background:#f5f7fa"><div style="background:linear-gradient(180deg,#e6edf7,#d3deec);padding:10px 14px;display:flex;gap:8px;border-bottom:1px solid #b8c8da"><button id="txtBtnSave" style="padding:6px 14px;border-radius:6px;border:1px solid #3a8eef;background:#4a9eff;color:#fff;font-size:13px;cursor:pointer;font-family:inherit">'+t('btn.save')+'</button><button id="txtBtnClear" style="padding:6px 14px;border-radius:6px;border:1px solid #b8c8da;background:#f0f4fa;color:#1e2b3a;font-size:13px;cursor:pointer;font-family:inherit">'+t('btn.clear')+'</button><span id="txtStatus" style="margin-left:auto;font-size:12px;color:#5b6f82;align-self:center"></span></div><textarea id="txtEditor" style="flex:1;padding:16px;border:none;outline:none;resize:none;font-size:15px;line-height:1.6;background:#fff;color:#1e2b3a;font-family:Consolas,Monaco,monospace;-webkit-user-select:text;user-select:text"></textarea></div>';
+const resizeHandle=document.createElement('div');
+resizeHandle.className='window-resize';
+winEl.appendChild(titleBar);winEl.appendChild(contentEl);winEl.appendChild(resizeHandle);
 windowsLayer.appendChild(winEl);
 makeDraggable(winEl,titleBar);
+makeResizable(winEl,resizeHandle);
 winEl.addEventListener('mousedown',function(){winEl.style.zIndex=++windowZIndex;focusWindow(winId)});
 const taskbarBtn=document.createElement('button');
 taskbarBtn.className='taskbar-btn active';
@@ -746,17 +919,17 @@ focusWindow(winId);
 const editor=contentEl.querySelector('#txtEditor');
 const status=contentEl.querySelector('#txtStatus');
 api('read',{path:relPath}).then(function(r){
-if(r.ok){editor.value=r.content;status.textContent='已加载'}
-else{status.textContent='读取失败'}
-}).catch(function(){status.textContent='读取失败'});
+if(r.ok){editor.value=r.content;status.textContent=t('editor.status.loaded')}
+else{status.textContent=t('editor.status.read_failed')}
+}).catch(function(){status.textContent=t('editor.status.read_failed')});
 contentEl.querySelector('#txtBtnSave').addEventListener('click',function(){
 api('write',{path:relPath,content:editor.value}).then(function(r){
-if(r.ok){status.textContent='已保存 '+new Date().toLocaleTimeString();toast('已保存')}
-else{status.textContent='保存失败';toast('保存失败')}
+if(r.ok){status.textContent=t('editor.status.saved',{time:new Date().toLocaleTimeString()});toast(t('msg.saved'))}
+else{status.textContent=t('editor.status.save_failed');toast(t('msg.save_failed'))}
 });
 });
 contentEl.querySelector('#txtBtnClear').addEventListener('click',function(){
-editor.value='';status.textContent='已清空';
+editor.value='';status.textContent=t('editor.status.cleared');
 });
 }
 function renderDir(contentEl,path,win){
@@ -775,7 +948,7 @@ if(path===RECYCLE){
 const tb=document.createElement('div');
 tb.className='recycle-toolbar';
 const btn=document.createElement('button');
-btn.textContent='清空回收站';
+btn.textContent=t('msg.trash_clear');
 btn.addEventListener('click',emptyTrash);
 tb.appendChild(btn);
 contentEl.appendChild(tb);
@@ -799,7 +972,7 @@ renderDir(contentEl,parentPath,win);
 const list=document.createElement('div');
 list.className='item-list';
 const loading=document.createElement('div');
-loading.className='empty-message';loading.textContent='正在读取...';
+loading.className='empty-message';loading.textContent=t('msg.loading');
 list.appendChild(loading);
 contentEl.appendChild(list);
 readDir(path).then(function(items){
@@ -816,7 +989,7 @@ function finishRender(items){
 list.innerHTML='';
 if(!items.length){
 const em=document.createElement('div');
-em.className='empty-message';em.textContent='空文件夹';
+em.className='empty-message';em.textContent=t('msg.empty_folder');
 list.appendChild(em);return;
 }
 items.sort(function(a,b){if(a.isDir!==b.isDir)return a.isDir?-1:1;return a.name.localeCompare(b.name)});
@@ -833,15 +1006,13 @@ info.className='item-info';
 const nm=document.createElement('div');
 nm.className='item-name';nm.textContent=f.name;
 const mt=document.createElement('div');
-mt.className='item-meta';mt.textContent=f.isDir?'文件夹':'文件';
+mt.className='item-meta';mt.textContent=f.isDir?t('prop.type_folder'):t('prop.type_file');
 info.appendChild(nm);info.appendChild(mt);
 item.appendChild(icon);item.appendChild(info);
 const relPath=baseRel+'/'+f.name;
 if(f.isDir)item.setAttribute('data-drop-path',relPath);
-let suppressClick=false;
 item.addEventListener('dblclick',function(e){
 e.preventDefault();
-if(suppressClick)return;
 if(f.isDir){
 const newPath=(path.replace(/\/$/,''))+'/'+f.name+'/';
 win.path=newPath;
@@ -860,7 +1031,7 @@ list.appendChild(item);
 }).catch(function(err){
 list.innerHTML='';
 const em=document.createElement('div');
-em.className='empty-message';em.innerHTML='读取失败<br><br>'+err.message;
+em.className='empty-message';em.innerHTML=t('msg.read_failed')+'<br><br>'+err.message;
 list.appendChild(em);
 });
 }
@@ -912,6 +1083,45 @@ document.addEventListener('touchmove',onMove,{passive:false});
 document.addEventListener('touchend',onEnd);
 document.addEventListener('touchcancel',onEnd);
 }
+function makeResizable(winEl,handleEl){
+let sx=0,sy=0,sw=0,sh=0,resizing=false;
+function pos(e){
+if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
+return{x:e.clientX,y:e.clientY};
+}
+function onStart(e){
+const p=pos(e);
+resizing=true;sx=p.x;sy=p.y;
+sw=winEl.offsetWidth;sh=winEl.offsetHeight;
+winEl.style.zIndex=++windowZIndex;
+if(e.cancelable)e.preventDefault();
+if(e.stopPropagation)e.stopPropagation();
+}
+function onMove(e){
+if(!resizing)return;
+const p=pos(e);
+let nw=sw+(p.x-sx);
+let nh=sh+(p.y-sy);
+const lw=windowsLayer.clientWidth,lh=windowsLayer.clientHeight;
+const r=winEl.getBoundingClientRect();
+const lr=windowsLayer.getBoundingClientRect();
+const maxW=lw-(r.left-lr.left)-4;
+const maxH=lh-(r.top-lr.top)-4;
+nw=Math.max(240,Math.min(nw,maxW));
+nh=Math.max(160,Math.min(nh,maxH));
+winEl.style.width=nw+'px';
+winEl.style.height=nh+'px';
+if(e.cancelable)e.preventDefault();
+}
+function onEnd(){resizing=false}
+handleEl.addEventListener('mousedown',onStart);
+document.addEventListener('mousemove',onMove);
+document.addEventListener('mouseup',onEnd);
+handleEl.addEventListener('touchstart',onStart,{passive:false});
+document.addEventListener('touchmove',onMove,{passive:false});
+document.addEventListener('touchend',onEnd);
+document.addEventListener('touchcancel',onEnd);
+}
 function closeWindow(winId){
 const rec=windows.get(winId);
 if(!rec)return;
@@ -935,14 +1145,18 @@ const startPath=customPath||cfg.path;
 const winId=appId+'-'+nextWindowId++;
 const winEl=document.createElement('div');
 winEl.className='window';
-const p=getCenterPosition(520);
+const p=getCenterPosition(480);
+const winW=Math.min(480,window.innerWidth-20);
+const winH=Math.min(420,window.innerHeight-140);
 winEl.style.left=p.left+'px';winEl.style.top=p.top+'px';
+winEl.style.width=winW+'px';
+winEl.style.height=winH+'px';
 winEl.style.zIndex=++windowZIndex;
 const titleBar=document.createElement('div');
 titleBar.className='window-titlebar';
 const titleDiv=document.createElement('div');
 titleDiv.className='window-title';
-titleDiv.innerHTML='<span class="title-icon '+cfg.icon+'"></span><span>XiaofangOS - '+cfg.title+'</span>';
+titleDiv.innerHTML='<span class="title-icon '+cfg.icon+'"></span><span>'+t('app.name')+' - '+t(cfg.titleKey)+'</span>';
 const controls=document.createElement('div');
 controls.className='window-controls';
 const closeBtn=document.createElement('button');
@@ -953,15 +1167,18 @@ controls.appendChild(closeBtn);
 titleBar.appendChild(titleDiv);titleBar.appendChild(controls);
 const contentEl=document.createElement('div');
 contentEl.className='window-content';
-winEl.appendChild(titleBar);winEl.appendChild(contentEl);
+const resizeHandle=document.createElement('div');
+resizeHandle.className='window-resize';
+winEl.appendChild(titleBar);winEl.appendChild(contentEl);winEl.appendChild(resizeHandle);
 windowsLayer.appendChild(winEl);
 makeDraggable(winEl,titleBar);
+makeResizable(winEl,resizeHandle);
 winEl.addEventListener('mousedown',function(){winEl.style.zIndex=++windowZIndex;focusWindow(winId)});
 const win={path:startPath,el:winEl,root:cfg.root};
 renderDir(contentEl,startPath,win);
 const taskbarBtn=document.createElement('button');
 taskbarBtn.className='taskbar-btn active';
-taskbarBtn.innerHTML='<span class="tb-icon '+cfg.icon+'"></span><span>'+cfg.title+'</span>';
+taskbarBtn.innerHTML='<span class="tb-icon '+cfg.icon+'"></span><span>'+t(cfg.titleKey)+'</span>';
 taskbarBtn.addEventListener('click',function(){focusWindow(winId)});
 taskbarCenter.appendChild(taskbarBtn);
 windows.set(winId,{el:winEl,taskbarBtn:taskbarBtn,config:cfg,win:win});
@@ -969,7 +1186,7 @@ focusWindow(winId);
 }
 function refreshRecycleIfOpen(){
 windows.forEach(function(rec){
-if(rec.config&&rec.config.title==='回收站'&&rec.win){
+if(rec.config&&rec.config.titleKey==='desktop.recycle'&&rec.win){
 const contentEl=rec.el.querySelector('.window-content');
 if(contentEl){contentEl.innerHTML='';renderDir(contentEl,rec.win.path,rec.win)}
 }
@@ -1002,6 +1219,11 @@ powerEntry.classList.remove('open');
 startMenu.querySelectorAll('.start-item[data-app]').forEach(function(item){
 item.addEventListener('click',function(){
 const appId=item.getAttribute('data-app');
+if(appId==='terminal'){
+if(window.XiaofangOpenTerminal)window.XiaofangOpenTerminal();
+startMenu.classList.remove('open');
+return;
+}
 openApp(appId);
 startMenu.classList.remove('open');
 });
@@ -1017,9 +1239,9 @@ deleteCookie(BOOT_COOKIE);setCookie(BOOT_COOKIE,'restarted',365);location.reload
 });
 document.getElementById('menuShutdown').addEventListener('click',function(){
 deleteCookie(BOOT_COOKIE);
-document.body.innerHTML='<div class="shutdown-screen"><div class="shutdown-dots"><span></span><span></span><span></span><span></span><span></span></div><div class="shutdown-text">正在关机...</div></div>';
+document.body.innerHTML='<div class="shutdown-screen"><div class="shutdown-dots"><span></span><span></span><span></span><span></span><span></span></div><div class="shutdown-text">'+t('shutdown.doing')+'</div></div>';
 setTimeout(function(){
-document.body.innerHTML='<div class="shutdown-done">已关机</div>';
+document.body.innerHTML='<div class="shutdown-done">'+t('shutdown.done')+'</div>';
 try{window.close()}catch(e){}
 },2200);
 });
@@ -1057,50 +1279,50 @@ ctxMenu.classList.add('open');
 function showItemContextMenu(x,y,relPath,name,isDir,inRecycle){
 const items=[];
 if(!inRecycle){
-if(name.toLowerCase().endsWith('.xfapp')&&!isDir)items.push({text:'安装',onClick:function(){installApp(name)}});
-if(!isDir&&name.toLowerCase().endsWith('.txt'))items.push({text:'用文本编辑器打开',onClick:function(){openTextEditor(relPath,name)}});
-if(!isDir&&(isTextFile(name)||isImageFile(name)||isAudioFile(name)||isVideoFile(name)))items.push({text:'预览',onClick:function(){openPreview(relPath,name,false)}});
-if(isDir)items.push({text:'打开',onClick:function(){openApp('pc','/'+relPath+'/')}});
+if(name.toLowerCase().endsWith('.xfapp')&&!isDir)items.push({text:t('ctx.install'),onClick:function(){installApp(name)}});
+if(!isDir&&name.toLowerCase().endsWith('.txt'))items.push({text:t('ctx.open_with_editor'),onClick:function(){openTextEditor(relPath,name)}});
+if(!isDir&&(isTextFile(name)||isImageFile(name)||isAudioFile(name)||isVideoFile(name)))items.push({text:t('ctx.preview'),onClick:function(){openPreview(relPath,name,false)}});
+if(isDir)items.push({text:t('ctx.open'),onClick:function(){openApp('pc','/'+relPath+'/')}});
 items.push({sep:true});
-items.push({text:'属性',onClick:function(){showStat(relPath)}});
-items.push({text:'重命名',onClick:function(){renameItem(relPath,name)}});
-items.push({text:'移动',onClick:function(){pickFolder('选择目标文件夹',function(dst){
+items.push({text:t('ctx.properties'),onClick:function(){showStat(relPath)}});
+items.push({text:t('ctx.rename'),onClick:function(){renameItem(relPath,name)}});
+items.push({text:t('ctx.move'),onClick:function(){pickFolder(t('dlg.pick_folder_title'),function(dst){
 if(!dst)return;
 api('move',{srcs:[relPath],dst:dst}).then(function(r){
-if(r.ok){toast('已移动');renderDesktopIcons();refreshWindows()}
-else{toast('移动失败')}
+if(r.ok){toast(t('msg.moved'));renderDesktopIcons();refreshWindows()}
+else{toast(t('msg.move_failed'))}
 });
 })}});
-items.push({text:'复制到',onClick:function(){pickFolder('选择目标文件夹',function(dst){
+items.push({text:t('ctx.copy_to'),onClick:function(){pickFolder(t('dlg.pick_folder_title'),function(dst){
 if(!dst)return;
 api('copy',{srcs:[relPath],dst:dst}).then(function(r){
-if(r.ok){toast('已复制');renderDesktopIcons();refreshWindows()}
-else{toast('复制失败')}
+if(r.ok){toast(t('msg.copied'));renderDesktopIcons();refreshWindows()}
+else{toast(t('msg.copy_failed'))}
 });
 })}});
 items.push({sep:true});
-items.push({text:'删除',danger:true,onClick:function(){trashItem(relPath)}});
+items.push({text:t('ctx.delete'),danger:true,onClick:function(){trashItem(relPath)}});
 }else{
-items.push({text:'还原到 home',onClick:function(){restoreItem(relPath)}});
+items.push({text:t('ctx.restore'),onClick:function(){restoreItem(relPath)}});
 items.push({sep:true});
-items.push({text:'属性',onClick:function(){showStat(relPath)}});
-items.push({text:'永久删除',danger:true,onClick:function(){deletePermanently(relPath,name)}});
+items.push({text:t('ctx.properties'),onClick:function(){showStat(relPath)}});
+items.push({text:t('ctx.delete_forever'),danger:true,onClick:function(){deletePermanently(relPath,name)}});
 }
 showContextMenu(x,y,items);
 }
 function showStat(relPath){
 fetch('/api.php?action=stat&path='+encodeURIComponent(relPath)+'&_t='+Date.now()).then(function(r){return r.json()}).then(function(d){
-if(!d.ok){toast('无法获取属性');return}
+if(!d.ok){toast(t('msg.failed'));return}
 let html='<div class="stat-panel">';
-html+='<div class="stat-row"><div class="stat-label">名称</div><div class="stat-value">'+escapeHtml(d.name)+'</div></div>';
-html+='<div class="stat-row"><div class="stat-label">路径</div><div class="stat-value">'+escapeHtml(d.path)+'</div></div>';
-html+='<div class="stat-row"><div class="stat-label">类型</div><div class="stat-value">'+escapeHtml(d.type)+'</div></div>';
-html+='<div class="stat-row"><div class="stat-label">大小</div><div class="stat-value">'+escapeHtml(d.sizeText)+'</div></div>';
-html+='<div class="stat-row"><div class="stat-label">修改时间</div><div class="stat-value">'+escapeHtml(d.mtimeText)+'</div></div>';
-if(d.isDir)html+='<div class="stat-row"><div class="stat-label">文件数量</div><div class="stat-value">'+d.count+'</div></div>';
+html+='<div class="stat-row"><div class="stat-label">'+t('prop.name')+'</div><div class="stat-value">'+escapeHtml(d.name)+'</div></div>';
+html+='<div class="stat-row"><div class="stat-label">'+t('prop.path')+'</div><div class="stat-value">'+escapeHtml(d.path)+'</div></div>';
+html+='<div class="stat-row"><div class="stat-label">'+t('prop.type')+'</div><div class="stat-value">'+escapeHtml(d.type)+'</div></div>';
+html+='<div class="stat-row"><div class="stat-label">'+t('prop.size')+'</div><div class="stat-value">'+escapeHtml(d.sizeText)+'</div></div>';
+html+='<div class="stat-row"><div class="stat-label">'+t('prop.mtime')+'</div><div class="stat-value">'+escapeHtml(d.mtimeText)+'</div></div>';
+if(d.isDir)html+='<div class="stat-row"><div class="stat-label">'+t('prop.count')+'</div><div class="stat-value">'+d.count+'</div></div>';
 html+='</div>';
-showDialog({title:'属性',html:html,buttons:[{text:'确定',primary:true,onClick:closeDialog}]});
-}).catch(function(){toast('获取属性失败')});
+showDialog({title:t('dlg.properties_title'),html:html,buttons:[{text:t('btn.ok'),primary:true,onClick:closeDialog}]});
+}).catch(function(){toast(t('msg.failed'))});
 }
 function escapeHtml(s){
 return String(s==null?'':s).replace(/[&<>"']/g,function(c){
@@ -1113,19 +1335,19 @@ overlay.className='picker-overlay open';
 let curPath='home';
 const picker=document.createElement('div');
 picker.className='picker';
-picker.innerHTML='<div class="picker-title">'+escapeHtml(title)+'</div><div class="picker-path" id="pickPath">/home</div><div class="picker-list" id="pickList"></div><div class="picker-footer"><button class="dialog-btn" id="pickCancel">取消</button><button class="dialog-btn primary" id="pickOk">选择此文件夹</button></div>';
+picker.innerHTML='<div class="picker-title">'+escapeHtml(title)+'</div><div class="picker-path" id="pickPath">/home</div><div class="picker-list" id="pickList"></div><div class="picker-footer"><button class="dialog-btn" id="pickCancel">'+t('btn.cancel')+'</button><button class="dialog-btn primary" id="pickOk">'+t('pick.choose')+'</button></div>';
 overlay.appendChild(picker);
 document.body.appendChild(overlay);
 const pathEl=picker.querySelector('#pickPath');
 const listEl=picker.querySelector('#pickList');
 function load(){
 pathEl.textContent='/'+curPath;
-listEl.innerHTML='<div style="padding:20px;text-align:center;color:#888;font-size:13px">加载中...</div>';
+listEl.innerHTML='<div style="padding:20px;text-align:center;color:#888;font-size:13px">'+t('msg.loading')+'</div>';
 readDir('/'+curPath).then(function(items){
 listEl.innerHTML='';
 const up=document.createElement('div');
 up.className='picker-item';
-up.innerHTML='<span style="font-size:18px">↩</span><span>.. 上一级</span>';
+up.innerHTML='<span style="font-size:18px">↩</span><span>'+t('pick.up')+'</span>';
 up.addEventListener('click',function(){
 if(curPath==='home')return;
 const parts=curPath.split('/');
@@ -1147,11 +1369,11 @@ listEl.appendChild(it);
 if(!items.filter(function(f){return f.isDir}).length){
 const em=document.createElement('div');
 em.style.cssText='padding:16px;text-align:center;color:#999;font-size:12px';
-em.textContent='（无子文件夹）';
+em.textContent=t('pick.no_subfolder');
 listEl.appendChild(em);
 }
 }).catch(function(){
-listEl.innerHTML='<div style="padding:20px;text-align:center;color:#e16b6b;font-size:13px">读取失败</div>';
+listEl.innerHTML='<div style="padding:20px;text-align:center;color:#e16b6b;font-size:13px">'+t('pick.failed')+'</div>';
 });
 }
 load();
@@ -1172,40 +1394,40 @@ callback(null);
 }
 function installApp(filename){
 api('install_check',{src:'home/'+filename}).then(function(r){
-if(r.error){toast('安装失败：'+r.error,3000);return}
+if(r.error){toast(t('msg.install_fail')+': '+r.error,3000);return}
 if(r.decision==='fail'){
-toast('安装失败：已有更高版本 ('+r.oldVersion+' > '+r.newVersion+')',3500);
+toast(t('msg.install_fail_newer',{old:r.oldVersion,new:r.newVersion}),3500);
 return;
 }
 let msg='';
-if(r.reason==='upgrade')msg='将覆盖旧版本 '+r.oldVersion+' → '+r.newVersion+'，继续？\n安装后名称：'+r.id+'.xfapp';
-else if(r.reason==='same_version')msg='相同版本 '+r.newVersion+'，覆盖安装？\n安装后名称：'+r.id+'.xfapp';
-else msg='确认安装 '+filename+' ？\n安装后名称：'+r.id+'.xfapp';
+if(r.reason==='upgrade')msg=t('msg.install_overwrite',{old:r.oldVersion,new:r.newVersion})+'\n'+t('msg.install_after',{id:r.id});
+else if(r.reason==='same_version')msg=t('msg.install_same',{v:r.newVersion})+'\n'+t('msg.install_after',{id:r.id});
+else msg=t('msg.install_confirm',{name:filename})+'\n'+t('msg.install_after',{id:r.id});
 showDialog({
-title:'安装应用',
+title:t('dlg.install_title'),
 message:msg,
 buttons:[
-{text:'取消',onClick:closeDialog},
-{text:'安装',primary:true,onClick:function(){closeDialog();doInstall(filename,r.id)}}
+{text:t('btn.cancel'),onClick:closeDialog},
+{text:t('ctx.install'),primary:true,onClick:function(){closeDialog();doInstall(filename,r.id)}}
 ]
 });
 });
 }
 function doInstall(filename,targetId){
-toast('正在安装...',1500);
+toast(t('msg.installing'),1500);
 const xhr=new XMLHttpRequest();
 const srcParts=('home/'+filename).split('/').map(function(s){return encodeURIComponent(s)}).join('/');
 xhr.open('GET','/'+srcParts,true);
 xhr.responseType='arraybuffer';
 xhr.onload=function(){
-if(xhr.status!==200){toast('读取源文件失败');return}
+if(xhr.status!==200){toast(t('msg.read_src_failed'));return}
 const buf=xhr.response;
 const xhr2=new XMLHttpRequest();
 xhr2.open('POST','/api.php?action=install',true);
 xhr2.setRequestHeader('X-Target-Path','Ubuntu/mnt/data/'+targetId+'.xfapp');
 xhr2.onload=function(){
-if(xhr2.status===200){toast('安装成功：'+targetId+'.xfapp');refreshApps();renderDesktopIcons()}
-else{toast('安装失败')}
+if(xhr2.status===200){toast(t('msg.install_ok',{name:targetId+'.xfapp'}));refreshApps();renderDesktopIcons()}
+else{toast(t('msg.install_fail'))}
 };
 xhr2.send(buf);
 };
@@ -1213,25 +1435,25 @@ xhr.send();
 }
 function trashItem(relPath){
 api('trash',{target:relPath}).then(function(r){
-if(r.ok){toast('已移到回收站');renderDesktopIcons();refreshRecycleIfOpen();refreshWindows()}
-else{toast('失败：'+(r.error||''))}
+if(r.ok){toast(t('msg.deleted_to_trash'));renderDesktopIcons();refreshRecycleIfOpen();refreshWindows()}
+else{toast(t('msg.failed'))}
 });
 }
 function renameItem(relPath,oldName){
 showDialog({
-title:'重命名',
-message:'重命名 "'+oldName+'"：',
+title:t('dlg.rename_title'),
+message:t('dlg.rename_msg',{name:oldName}),
 input:oldName,
 buttons:[
-{text:'取消',onClick:closeDialog},
-{text:'确定',primary:true,onClick:function(newName){
+{text:t('btn.cancel'),onClick:closeDialog},
+{text:t('btn.ok'),primary:true,onClick:function(newName){
 closeDialog();
 if(!newName||newName===oldName)return;
 const parent=relPath.replace(/\/[^\/]*$/,'');
 const to=parent+'/'+newName;
 api('rename',{from:relPath,to:to}).then(function(r){
-if(r.ok){toast('已重命名');renderDesktopIcons();refreshRecycleIfOpen();refreshWindows()}
-else{toast('失败：'+(r.error||''))}
+if(r.ok){toast(t('msg.renamed'));renderDesktopIcons();refreshRecycleIfOpen();refreshWindows()}
+else{toast(t('msg.failed'))}
 });
 }}
 ]
@@ -1239,15 +1461,15 @@ else{toast('失败：'+(r.error||''))}
 }
 function deletePermanently(relPath,name){
 showDialog({
-title:'永久删除',
-message:'确定要永久删除 "'+name+'" 吗？此操作不可撤销。',
+title:t('dlg.delete_title'),
+message:t('msg.permanent_delete',{name:name}),
 buttons:[
-{text:'取消',onClick:closeDialog},
-{text:'删除',danger:true,onClick:function(){
+{text:t('btn.cancel'),onClick:closeDialog},
+{text:t('ctx.delete'),danger:true,onClick:function(){
 closeDialog();
 api('delete',{target:relPath}).then(function(r){
-if(r.ok){toast('已删除');renderDesktopIcons();refreshApps();refreshRecycleIfOpen();refreshWindows()}
-else{toast('失败：'+(r.error||''))}
+if(r.ok){toast(t('msg.deleted'));renderDesktopIcons();refreshApps();refreshRecycleIfOpen();refreshWindows()}
+else{toast(t('msg.failed'))}
 });
 }}
 ]
@@ -1255,21 +1477,21 @@ else{toast('失败：'+(r.error||''))}
 }
 function restoreItem(relPath){
 api('restore',{target:relPath}).then(function(r){
-if(r.ok){toast('已恢复到 home');renderDesktopIcons();refreshRecycleIfOpen();refreshWindows()}
-else{toast('失败：'+(r.error||''))}
+if(r.ok){toast(t('msg.restored'));renderDesktopIcons();refreshRecycleIfOpen();refreshWindows()}
+else{toast(t('msg.failed'))}
 });
 }
 function emptyTrash(){
 showDialog({
-title:'清空回收站',
-message:'确定要清空回收站吗？所有文件将被永久删除，此操作不可撤销。',
+title:t('dlg.empty_trash_title'),
+message:t('msg.trash_emptying'),
 buttons:[
-{text:'取消',onClick:closeDialog},
-{text:'清空',danger:true,onClick:function(){
+{text:t('btn.cancel'),onClick:closeDialog},
+{text:t('msg.trash_empty_btn'),danger:true,onClick:function(){
 closeDialog();
 api('empty_trash',{}).then(function(r){
-if(r.ok){toast('回收站已清空');refreshRecycleIfOpen()}
-else{toast('失败')}
+if(r.ok){toast(t('msg.trash_empty'));refreshRecycleIfOpen()}
+else{toast(t('msg.failed'))}
 });
 }}
 ]
@@ -1277,16 +1499,16 @@ else{toast('失败')}
 }
 function newFolder(){
 showDialog({
-title:'新建文件夹',
-input:'新建文件夹',
+title:t('dlg.new_folder_title'),
+input:t('dlg.new_folder_title'),
 buttons:[
-{text:'取消',onClick:closeDialog},
-{text:'创建',primary:true,onClick:function(name){
+{text:t('btn.cancel'),onClick:closeDialog},
+{text:t('btn.create'),primary:true,onClick:function(name){
 closeDialog();
 if(!name)return;
 api('mkdir',{path:'home/'+name}).then(function(r){
-if(r.ok){toast('已创建');renderDesktopIcons()}
-else{toast('失败：'+(r.error||''))}
+if(r.ok){toast(t('msg.created'));renderDesktopIcons()}
+else{toast(t('msg.failed'))}
 });
 }}
 ]
@@ -1294,41 +1516,98 @@ else{toast('失败：'+(r.error||''))}
 }
 function newTextFile(){
 showDialog({
-title:'新建文本文件',
+title:t('dlg.new_text_title'),
 input:'新建文本.txt',
 buttons:[
-{text:'取消',onClick:closeDialog},
-{text:'创建',primary:true,onClick:function(name){
+{text:t('btn.cancel'),onClick:closeDialog},
+{text:t('btn.create'),primary:true,onClick:function(name){
 closeDialog();
 if(!name)return;
 api('mkfile',{path:'home/'+name}).then(function(r){
-if(r.ok){toast('已创建');renderDesktopIcons()}
-else{toast('失败：'+(r.error||''))}
+if(r.ok){toast(t('msg.created'));renderDesktopIcons()}
+else{toast(t('msg.failed'))}
 });
 }}
 ]
 });
 }
+function showLanguageMenu(){
+const langs=[
+{code:'zh-CN',label:'简体中文'},
+{code:'en-US',label:'English'},
+{code:'ja-JP',label:'日本語'}
+];
+let html='<div class="lang-list">';
+langs.forEach(function(l){
+html+='<div class="lang-item'+(l.code===currentLang?' active':'')+'" data-code="'+l.code+'">'+l.label+'</div>';
+});
+html+='</div>';
+showDialog({
+title:t('dlg.language_title'),
+html:html,
+buttons:[{text:t('btn.cancel'),onClick:closeDialog}]
+});
+setTimeout(function(){
+document.querySelectorAll('.lang-item').forEach(function(el){
+el.addEventListener('click',function(){
+const code=el.getAttribute('data-code');
+closeDialog();
+loadLang(code).then(function(){
+renderDesktopIcons();
+refreshApps();
+refreshWindows();
+renderStartPinned();
+applyI18n();
+});
+});
+});
+},50);
+}
 desktop.addEventListener('contextmenu',function(e){
 e.preventDefault();
 if(e.target.closest('.window')||e.target.closest('.taskbar')||e.target.closest('.start-menu')||e.target.closest('.icon'))return;
 showContextMenu(e.clientX,e.clientY,[
-{text:'刷新',onClick:function(){renderDesktopIcons();refreshApps()}},
+{text:t('ctx.refresh'),onClick:function(){renderDesktopIcons();refreshApps()}},
 {sep:true},
-{text:'新建文件夹',onClick:newFolder},
-{text:'新建文本文件',onClick:newTextFile},
+{text:t('ctx.new_folder'),onClick:newFolder},
+{text:t('ctx.new_text'),onClick:newTextFile},
 {sep:true},
-{text:'扫描已安装应用',onClick:refreshApps}
+{text:t('ctx.scan_apps'),onClick:refreshApps},
+{text:t('ctx.language'),onClick:showLanguageMenu}
 ]);
 });
 document.addEventListener('contextmenu',function(e){
 if(!e.target.closest('.icon')&&!e.target.closest('.list-item')&&!e.target.closest('.desktop'))e.preventDefault();
 });
+window.XiaofangGetZIndex=function(){return ++windowZIndex};
+window.XiaofangCloseWindow=closeWindow;
+window.XiaofangMakeDraggable=makeDraggable;
+window.XiaofangMakeResizable=makeResizable;
+window.XiaofangFocusWindow=focusWindow;
+window.XiaofangRegisterWindow=function(winId,winEl,config){
+const taskbarBtn=document.createElement('button');
+taskbarBtn.className='taskbar-btn active';
+if(config.iconClass==='terminal'){
+taskbarBtn.innerHTML='<span class="tb-icon terminal"></span><span>'+config.title+'</span>';
+}else if(config.iconClass){
+taskbarBtn.innerHTML='<span class="tb-icon '+config.iconClass+'"></span><span>'+config.title+'</span>';
+}else{
+taskbarBtn.innerHTML='<span class="tb-icon"></span><span>'+config.title+'</span>';
+}
+taskbarBtn.addEventListener('click',function(){focusWindow(winId)});
+taskbarCenter.appendChild(taskbarBtn);
+windows.set(winId,{el:winEl,taskbarBtn:taskbarBtn,config:config});
+focusWindow(winId);
+};
+const savedLang=localStorage.getItem(LANG_STORAGE)||detectDefaultLang();
+loadLang(savedLang).then(function(){
 runBootSequence(function(){
 renderDesktopIcons();
 refreshApps();
-api('cleanup',{}).then(function(r){if(r.deleted>0)console.log('回收站已清理 '+r.deleted+' 项')}).catch(function(){});
+renderStartPinned();
+api('cleanup',{}).then(function(r){if(r.deleted>0)console.log(t('msg.cleanup_log',{n:r.deleted}))}).catch(function(){});
 setInterval(renderDesktopIcons,8000);
 setInterval(refreshApps,15000);
+});
 });
 })();

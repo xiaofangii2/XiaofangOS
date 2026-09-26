@@ -8,7 +8,7 @@ ZIP_URL="https://github.com/xiaofangii2/XiaofangOS/archive/refs/heads/main.zip"
 ZIP_NAME="XiaofangOS-main.zip"
 UBUNTU_URL="https://github.com/xiaofangii2/XiaofangOS/releases/download/Ubuntu/Ubuntu.zip"
 UBUNTU_ZIP="Ubuntu.zip"
-PORT="25565"
+PORT="2026"
 
 C_RESET="\033[0m"
 C_BOLD="\033[1m"

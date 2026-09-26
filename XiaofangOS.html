@@ -3,11 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>XiaofangOS-HTML</title>
+<title>XiaofangOS</title>
 <script src="https://cdn.bootcdn.net/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <link rel="stylesheet" href="assets/style.css">
 </head>
-
 <body>
 <div class="boot-screen" id="bootScreen">
 <div class="boot-logo"><div class="win"></div><div class="win"></div><div class="win"></div><div class="win"></div></div>
@@ -17,24 +16,55 @@
 </div>
 <div class="desktop" id="desktop">
 <div class="desktop-icons" id="desktopIcons">
-<div class="icon icon-pc" id="icon-pc"><div class="icon-graphic"><div class="stand"></div><div class="stand-base"></div></div><div class="icon-label">此电脑</div></div>
-<div class="icon icon-recycle" id="icon-recycle"><div class="icon-graphic"><div class="stripe"></div></div><div class="icon-label">回收站</div></div>
+<div class="icon icon-pc" id="icon-pc" data-i18n-title="desktop.computer">
+<div class="icon-graphic"><div class="stand"></div><div class="stand-base"></div></div>
+<div class="icon-label" data-i18n="desktop.computer">此电脑</div>
+</div>
+<div class="icon icon-recycle" id="icon-recycle" data-i18n-title="desktop.recycle">
+<div class="icon-graphic"><div class="stripe"></div></div>
+<div class="icon-label" data-i18n="desktop.recycle">回收站</div>
+</div>
 </div>
 <div class="windows-layer" id="windowsLayer"></div>
 <div class="start-menu" id="startMenu">
-<div class="start-title">XiaofangOS</div>
-<div class="start-item" data-app="pc"><div class="start-item-icon tb-icon pc"></div><span>此电脑</span></div>
-<div class="start-item" data-app="recycle"><div class="start-item-icon tb-icon recycle"></div><span>回收站</span></div>
+<div class="start-title" data-i18n="start.title">XiaofangOS</div>
+<div class="start-item" data-app="pc">
+<div class="start-item-icon tb-icon pc"></div>
+<span data-i18n="desktop.computer">此电脑</span>
+</div>
+<div class="start-item" data-app="recycle">
+<div class="start-item-icon tb-icon recycle"></div>
+<span data-i18n="desktop.recycle">回收站</span>
+</div>
+<div class="start-item" data-app="terminal">
+<div class="start-item-icon tb-icon terminal"></div>
+<span data-i18n="win.terminal">终端</span>
+</div>
+<div id="startPinnedSection"></div>
 <div class="start-sep"></div>
-<div class="start-item" id="powerEntry"><div class="icon-power"></div><span>电源</span><div class="start-arrow"></div>
+<div class="start-item" id="powerEntry">
+<div class="icon-power"></div>
+<span data-i18n="menu.power">电源</span>
+<div class="start-arrow"></div>
 <div class="submenu" id="powerSubmenu">
-<div class="submenu-item" id="menuRestart"><div class="icon-restart"></div><span>重启</span></div>
-<div class="submenu-item shutdown" id="menuShutdown"><div class="icon-shutdown"></div><span>关机</span></div>
+<div class="submenu-item" id="menuRestart">
+<div class="icon-restart"></div>
+<span data-i18n="menu.restart">重启</span>
+</div>
+<div class="submenu-item shutdown" id="menuShutdown">
+<div class="icon-shutdown"></div>
+<span data-i18n="menu.shutdown">关机</span>
+</div>
 </div>
 </div>
 </div>
 <div class="taskbar">
-<div class="taskbar-left"><button class="taskbar-btn" id="startBtn"><span style="font-weight:700;font-size:15px">▣</span><span>开始</span></button></div>
+<div class="taskbar-left">
+<button class="taskbar-btn" id="startBtn">
+<span style="font-weight:700;font-size:15px">▣</span>
+<span data-i18n="start.start">开始</span>
+</button>
+</div>
 <div class="taskbar-center" id="taskbarCenter"></div>
 <div class="taskbar-right" id="taskbarTime">--:--</div>
 </div>
@@ -49,5 +79,6 @@
 </div>
 <div class="toast" id="toast"></div>
 <script src="assets/main.js"></script>
+<script src="assets/terminal.js"></script>
 </body>
 </html>

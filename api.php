@@ -1,4 +1,8 @@
 <?php
+ini_set('log_errors', '1');
+ini_set('error_log', '/storage/emulated/0/Android/media/com.xiaofang.os/php_error.log');
+ini_set('display_errors', '1');
+error_reporting(E_ALL);
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, X-Target-Path');
@@ -7,6 +11,8 @@ header('Pragma: no-cache');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 $ROOT = __DIR__;
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
+error_log('=== api.php called action=' . $action . ' ===');
+error_log('GET=' . json_encode($_GET));
 function safe_path($root, $rel) {
     $rel = ltrim($rel, '/');
     if (strpos($rel, '..') !== false) return null;
@@ -113,11 +119,12 @@ switch ($action) {
     case 'list':
         $rel = $_GET['path'] ?? '';
         $target = safe_path($ROOT, $rel);
-        if (!$target || !file_exists($target)) json_out(['error' => 'not found'], 404);
-        if (!is_dir($target)) json_out(['error' => 'not a dir'], 404);
+        error_log('list: rel=' . $rel . ' target=' . $target);
+        if (!$target || !file_exists($target)) { error_log('list: not found'); json_out(['error' => 'not found'], 404); }
+        if (!is_dir($target)) { error_log('list: not a dir'); json_out(['error' => 'not a dir'], 404); }
         $items = [];
         $fh = @scandir($target);
-        if ($fh === false) json_out(['error' => 'read fail'], 500);
+        if ($fh === false) { error_log('list: scandir fail'); json_out(['error' => 'read fail'], 500); }
         foreach ($fh as $f) {
             if ($f === '.' || $f === '..') continue;
             $full = $target . '/' . $f;
@@ -128,6 +135,7 @@ switch ($action) {
                 'mtime' => filemtime($full)
             ];
         }
+        error_log('list: items=' . count($items));
         json_out(['ok' => true, 'items' => $items]);
     case 'install':
         $target = $_SERVER['HTTP_X_TARGET_PATH'] ?? '';
@@ -292,7 +300,13 @@ switch ($action) {
     case 'cleanup':
         $recycleDir = $ROOT . '/recycle-bin';
         if (!is_dir($recycleDir)) json_out(['ok' => true, 'deleted' => 0]);
-        $limit = time() - 30 * 24 * 60 * 60;
+        $days = 30;
+        $daysFile = $ROOT . '/.config/recycle_days.txt';
+        if (is_file($daysFile)) {
+            $v = (int)trim(file_get_contents($daysFile));
+            if ($v > 0) $days = $v;
+        }
+        $limit = time() - $days * 24 * 60 * 60;
         $deleted = 0;
         foreach (scandir($recycleDir) as $f) {
             if ($f === '.' || $f === '..') continue;
@@ -302,7 +316,22 @@ switch ($action) {
                 $deleted++;
             }
         }
-        json_out(['ok' => true, 'deleted' => $deleted]);
+        json_out(['ok' => true, 'deleted' => $deleted, 'days' => $days]);
+    case 'shell':
+        $input = json_decode(file_get_contents('php://input'), true);
+        $cmd = $input['cmd'] ?? '';
+        $cwd = $input['cwd'] ?? '';
+        if (!$cmd) json_out(['error' => 'no cmd'], 400);
+        if (!$cwd || !is_dir($cwd)) $cwd = $ROOT;
+        $xfpkgPath = $ROOT . '/Ubuntu/usr/bin/it/xfpkg';
+        $cmd = preg_replace('/^xfpkg(\s|$)/', 'bash ' . escapeshellarg($xfpkgPath) . '$1', $cmd);
+        $full = 'cd ' . escapeshellarg($cwd) . ' && ' . $cmd . ' 2>&1';
+        error_log('shell: cwd=' . $cwd . ' cmd=' . $cmd);
+        $out = shell_exec($full);
+        if ($out === null) $out = '';
+        error_log('shell output len=' . strlen($out));
+        json_out(['ok' => true, 'output' => $out, 'cwd' => $cwd]);
     default:
+        error_log('unknown action: ' . $action);
         json_out(['error' => 'unknown action'], 400);
 }
