@@ -13,6 +13,8 @@
 - 兼容 Via、火狐、夸克、UC、Chrome 等主流浏览器
 - 壁纸自动读取 `.config/background/wallpaper.{jpg,png,svg,xml,webp}`
 
+## 已知已知bug
+#1  电源无法正确突出
 ## 目录结构
 com.xiaofang.os/
 ├── XiaofangOS.html

@@ -2,6 +2,8 @@
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, X-Target-Path');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 $ROOT = __DIR__;
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
@@ -72,9 +74,12 @@ switch ($action) {
     case 'list':
         $rel = $_GET['path'] ?? '';
         $target = safe_path($ROOT, $rel);
-        if (!$target || !is_dir($target)) json_out(['error' => 'not a dir'], 404);
+        if (!$target || !file_exists($target)) json_out(['error' => 'not found'], 404);
+        if (!is_dir($target)) json_out(['error' => 'not a dir'], 404);
         $items = [];
-        foreach (scandir($target) as $f) {
+        $fh = @scandir($target);
+        if ($fh === false) json_out(['error' => 'read fail'], 500);
+        foreach ($fh as $f) {
             if ($f === '.' || $f === '..') continue;
             $full = $target . '/' . $f;
             $items[] = [
@@ -175,6 +180,20 @@ switch ($action) {
         $dir = dirname($target);
         if (!is_dir($dir)) mkdir($dir, 0755, true);
         if (file_put_contents($target, '') === false) json_out(['error' => 'fail'], 500);
+        json_out(['ok' => true]);
+    case 'read':
+        $rel = $_GET['path'] ?? '';
+        $target = safe_path($ROOT, $rel);
+        if (!$target || !is_file($target)) json_out(['error' => 'not found'], 404);
+        $content = file_get_contents($target);
+        json_out(['ok' => true, 'content' => $content]);
+    case 'write':
+        $input = json_decode(file_get_contents('php://input'), true);
+        $target = safe_path($ROOT, $input['path'] ?? '');
+        if (!$target) json_out(['error' => 'bad'], 400);
+        $dir = dirname($target);
+        if (!is_dir($dir)) mkdir($dir, 0755, true);
+        if (file_put_contents($target, $input['content'] ?? '') === false) json_out(['error' => 'fail'], 500);
         json_out(['ok' => true]);
     default:
         json_out(['error' => 'unknown action'], 400);
