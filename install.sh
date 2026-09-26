@@ -97,7 +97,7 @@ curl -fL "$ZIP_URL" -o "$ZIP_NAME"
 echo -e "  ${C_GREEN}下载完成：$ZIP_NAME${C_RESET}"
 echo ""
 
-echo -e "${C_BLUE}${C_BOLD}[5/8] 覆盖解压到 $MEDIA ...${C_RESET}"
+echo -e "${C_BLUE}${C_BOLD}[5/8] 覆盖解压到 $TARGET ...${C_RESET}"
 TMP_DIR="$MEDIA/XiaofangOS-main"
 if [ -d "$TMP_DIR" ]; then
     rm -rf "$TMP_DIR"
@@ -117,9 +117,21 @@ echo -e "${C_BLUE}${C_BOLD}[6/8] 下载并解压 Ubuntu 目录...${C_RESET}"
 cd "$TARGET"
 curl -fL "$UBUNTU_URL" -o "$UBUNTU_ZIP"
 echo -e "  ${C_GREEN}下载完成：$UBUNTU_ZIP${C_RESET}"
-unzip -q -o "$UBUNTU_ZIP" -d "$TARGET"
+
+UBUNTU_TMP="$TARGET/.ubuntu-tmp"
+if [ -d "$UBUNTU_TMP" ]; then
+    rm -rf "$UBUNTU_TMP"
+fi
+mkdir -p "$UBUNTU_TMP"
+echo -e "  ${C_YELLOW}正在解压到临时目录...${C_RESET}"
+unzip -q -o "$UBUNTU_ZIP" -d "$UBUNTU_TMP"
 rm -f "$UBUNTU_ZIP"
-echo -e "  ${C_GREEN}Ubuntu 目录已解压${C_RESET}"
+
+if [ -d "$TARGET/Ubuntu" ]; then
+    rm -rf "$TARGET/Ubuntu"
+fi
+mv "$UBUNTU_TMP" "$TARGET/Ubuntu"
+echo -e "  ${C_GREEN}Ubuntu 目录已就位：$TARGET/Ubuntu${C_RESET}"
 echo ""
 
 echo -e "${C_BLUE}${C_BOLD}[7/8] 停掉旧服务器，启动新服务器...${C_RESET}"
