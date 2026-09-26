@@ -206,11 +206,15 @@ if(!dup)installedApps.push(a);
 renderAppIcons();
 });
 }
+function clearAllGhosts(){
+document.querySelectorAll('#drag-ghost').forEach(function(g){g.remove()});
+}
 function attachDragHandlers(el,relPath,name,isDir,source,ctxOptions){
 let longPressMenu=null;
 let longPressSelect=null;
 let dragging=false;
 let startX=0,startY=0;
+let ghost=null;
 let movedEnough=false;
 function getPoint(e){
 if(e.touches&&e.touches.length)return{x:e.touches[0].clientX,y:e.touches[0].clientY};
@@ -223,6 +227,7 @@ if(longPressSelect){clearTimeout(longPressSelect);longPressSelect=null}
 function endDrag(){
 if(dragging){
 dragging=false;
+if(ghost){ghost.remove();ghost=null}
 el.classList.remove('dragging');
 clearDropHighlight();
 dragState=null;
@@ -233,6 +238,7 @@ cleanupTimers();
 function onStart(e){
 if(selectionMode)return;
 if(dragging)return;
+clearAllGhosts();
 const p=getPoint(e);
 startX=p.x;startY=p.y;
 movedEnough=false;
@@ -247,9 +253,10 @@ longPressSelect=setTimeout(function(){
 longPressSelect=null;
 if(movedEnough||selectionMode)return;
 suppressNextClick=true;
+if(ghost){ghost.remove();ghost=null}
+el.classList.remove('dragging');
 dragging=false;
 dragState=null;
-el.classList.remove('dragging');
 clearDropHighlight();
 if(!selectionMode){
 enterSelectionMode();
@@ -260,7 +267,7 @@ toggleSelect(relPath,el);
 },2000);
 }
 function onMove(e){
-if(selectionMode)return;
+if(selectionMode){clearAllGhosts();return;}
 if(dragging&&!dragState)return;
 const p=getPoint(e);
 const dx=Math.abs(p.x-startX);
@@ -275,10 +282,16 @@ suppressNextClick=true;
 dragState={relPath:relPath,name:name,isDir:isDir,source:source};
 el.classList.add('dragging');
 if(navigator.vibrate)navigator.vibrate(20);
+ghost=document.createElement('div');
+ghost.id='drag-ghost';
+ghost.style.cssText='position:fixed;pointer-events:none;z-index:99999;padding:6px 12px;background:rgba(74,158,255,.9);color:#fff;border-radius:6px;font-size:13px;box-shadow:0 8px 20px rgba(0,0,0,.5);transform:translate(-50%,-50%)';
+ghost.textContent=name;
+document.body.appendChild(ghost);
 }
 }
 if(dragging){
 if(e.cancelable)e.preventDefault();
+if(ghost){ghost.style.left=p.x+'px';ghost.style.top=p.y+'px'}
 highlightDropTarget(p.x,p.y);
 }
 }
@@ -301,6 +314,12 @@ document.addEventListener('mouseup',onEnd);
 document.addEventListener('touchend',onEnd);
 document.addEventListener('touchcancel',onEnd);
 }
+window.addEventListener('blur',clearAllGhosts);
+document.addEventListener('visibilitychange',function(){
+if(document.hidden)clearAllGhosts();
+});
+window.addEventListener('resize',clearAllGhosts);
+window.addEventListener('scroll',clearAllGhosts,true);
 function highlightDropTarget(x,y){
 clearDropHighlight();
 const el=document.elementFromPoint(x,y);
@@ -518,6 +537,7 @@ icon.classList.add('selected');
 updateSelectionUI();
 }
 function enterSelectionMode(){
+clearAllGhosts();
 selectionMode=true;
 selectedPaths.clear();
 document.querySelectorAll('.icon[data-from-home]').forEach(function(el){

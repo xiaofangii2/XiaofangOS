@@ -37,6 +37,33 @@ function rm_recursive($path) {
         rmdir($path);
     } else { unlink($path); }
 }
+function cp_recursive($src, $dst) {
+    if (is_dir($src)) {
+        if (!is_dir($dst)) mkdir($dst, 0755, true);
+        foreach (scandir($src) as $f) {
+            if ($f === '.' || $f === '..') continue;
+            cp_recursive($src . '/' . $f, $dst . '/' . $f);
+        }
+    } else {
+        copy($src, $dst);
+    }
+}
+function dir_size($path) {
+    if (is_file($path)) return filesize($path);
+    $size = 0;
+    foreach (new RecursiveIteratorIterator(new RecursiveDirectoryIterator($path, RecursiveDirectoryIterator::SKIP_DOTS)) as $f) {
+        $size += $f->getSize();
+    }
+    return $size;
+}
+function dir_count($path) {
+    $n = 0;
+    foreach (scandir($path) as $f) {
+        if ($f === '.' || $f === '..') continue;
+        $n++;
+    }
+    return $n;
+}
 function parse_conf($content) {
     $r = ['author'=>'','id'=>'','version'=>'','introduce'=>''];
     foreach (preg_split('/\r?\n/', $content) as $line) {
@@ -69,6 +96,18 @@ function cmp_version($a, $b) {
         if ($x > $y) return 1;
     }
     return 0;
+}
+function fmt_type($path) {
+    if (is_dir($path)) return '文件夹';
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
+    if ($ext === '') return '文件';
+    return $ext . ' 文件';
+}
+function fmt_size($bytes) {
+    if ($bytes < 1024) return $bytes . ' B';
+    if ($bytes < 1024 * 1024) return round($bytes / 1024, 2) . ' KB';
+    if ($bytes < 1024 * 1024 * 1024) return round($bytes / 1024 / 1024, 2) . ' MB';
+    return round($bytes / 1024 / 1024 / 1024, 2) . ' GB';
 }
 switch ($action) {
     case 'list':
@@ -195,6 +234,75 @@ switch ($action) {
         if (!is_dir($dir)) mkdir($dir, 0755, true);
         if (file_put_contents($target, $input['content'] ?? '') === false) json_out(['error' => 'fail'], 500);
         json_out(['ok' => true]);
+    case 'move':
+        $input = json_decode(file_get_contents('php://input'), true);
+        $srcs = $input['srcs'] ?? [];
+        $dstDir = $input['dst'] ?? '';
+        if (!is_array($srcs) || !count($srcs) || !$dstDir) json_out(['error' => 'bad params'], 400);
+        $dstPath = safe_path($ROOT, $dstDir);
+        if (!$dstPath || !is_dir($dstPath)) json_out(['error' => 'dst not dir'], 404);
+        $results = [];
+        foreach ($srcs as $s) {
+            $srcPath = safe_path($ROOT, $s);
+            if (!$srcPath || !file_exists($srcPath)) { $results[] = ['src'=>$s,'ok'=>false,'err'=>'not found']; continue; }
+            if ($srcPath === $dstPath) { $results[] = ['src'=>$s,'ok'=>false,'err'=>'same path']; continue; }
+            $name = basename($srcPath);
+            $dest = unique_dest($dstPath . '/' . $name);
+            if (rename($srcPath, $dest)) $results[] = ['src'=>$s,'ok'=>true];
+            else $results[] = ['src'=>$s,'ok'=>false,'err'=>'move fail'];
+        }
+        json_out(['ok' => true, 'results' => $results]);
+    case 'copy':
+        $input = json_decode(file_get_contents('php://input'), true);
+        $srcs = $input['srcs'] ?? [];
+        $dstDir = $input['dst'] ?? '';
+        if (!is_array($srcs) || !count($srcs) || !$dstDir) json_out(['error' => 'bad params'], 400);
+        $dstPath = safe_path($ROOT, $dstDir);
+        if (!$dstPath || !is_dir($dstPath)) json_out(['error' => 'dst not dir'], 404);
+        $results = [];
+        foreach ($srcs as $s) {
+            $srcPath = safe_path($ROOT, $s);
+            if (!$srcPath || !file_exists($srcPath)) { $results[] = ['src'=>$s,'ok'=>false,'err'=>'not found']; continue; }
+            $name = basename($srcPath);
+            $dest = unique_dest($dstPath . '/' . $name);
+            cp_recursive($srcPath, $dest);
+            $results[] = ['src'=>$s,'ok'=>true];
+        }
+        json_out(['ok' => true, 'results' => $results]);
+    case 'stat':
+        $rel = $_GET['path'] ?? '';
+        $target = safe_path($ROOT, $rel);
+        if (!$target || !file_exists($target)) json_out(['error' => 'not found'], 404);
+        $isDir = is_dir($target);
+        $info = [
+            'ok' => true,
+            'name' => basename($target),
+            'path' => '/' . ltrim($rel, '/'),
+            'isDir' => $isDir,
+            'type' => fmt_type($target),
+            'size' => $isDir ? dir_size($target) : filesize($target),
+            'sizeText' => fmt_size($isDir ? dir_size($target) : filesize($target)),
+            'mtime' => filemtime($target),
+            'mtimeText' => date('Y-m-d H:i:s', filemtime($target))
+        ];
+        if ($isDir) {
+            $info['count'] = dir_count($target);
+        }
+        json_out($info);
+    case 'cleanup':
+        $recycleDir = $ROOT . '/recycle-bin';
+        if (!is_dir($recycleDir)) json_out(['ok' => true, 'deleted' => 0]);
+        $limit = time() - 30 * 24 * 60 * 60;
+        $deleted = 0;
+        foreach (scandir($recycleDir) as $f) {
+            if ($f === '.' || $f === '..') continue;
+            $full = $recycleDir . '/' . $f;
+            if (filemtime($full) < $limit) {
+                rm_recursive($full);
+                $deleted++;
+            }
+        }
+        json_out(['ok' => true, 'deleted' => $deleted]);
     default:
         json_out(['error' => 'unknown action'], 400);
 }
