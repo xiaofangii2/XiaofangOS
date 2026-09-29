@@ -45,6 +45,7 @@ com.xiaofang.os/
 
 ## 安装
 curl -fsSL https://raw.githubusercontent.com/xiaofangii2/XiaofangOS/main/install.sh -o install.sh
+
 bash install.sh
 ## 版本规则
 
@@ -82,4 +83,6 @@ CC BY-NC-SA 4.0
 
 详见 `LICENSE`。
 
-#重要的事情说三遍
+# 重要的事情说三遍
+# 目前已临时归档(以后可能会更新,但目前不会更新)
+## 目前最后一次更新内容 deb 原生支持运行!!!
