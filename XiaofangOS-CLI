@@ -1,0 +1,48 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+ROOT="/storage/emulated/0/Android/media/com.xiaofang.os"
+PORT=2026
+
+start() {
+    cd "$ROOT"
+    pkill -f "php -S 0.0.0.0:$PORT" 2>/dev/null
+    nohup php -S 0.0.0.0:$PORT >/dev/null 2>&1 &
+    echo "XiaofangOS 已启动 (端口 $PORT)"
+}
+
+version() {
+    echo "XiaofangOS 5.0"
+}
+
+stop() {
+    pkill -f "php -S 0.0.0.0:$PORT" 2>/dev/null
+    echo "XiaofangOS 已停止"
+}
+
+help() {
+    echo "XiaofangOS 命令"
+    echo ""
+    echo "  start     启动 XiaofangOS"
+    echo "  version   显示版本"
+    echo "  exit      停止 XiaofangOS"
+    echo "  help      显示此帮助"
+}
+
+case "$1" in
+    start)
+        start
+        ;;
+    version)
+        version
+        ;;
+    exit)
+        stop
+        ;;
+    help|"")
+        help
+        ;;
+    *)
+        echo "未知命令：$1"
+        help
+        ;;
+esac

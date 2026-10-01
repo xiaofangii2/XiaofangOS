@@ -8,7 +8,10 @@ ZIP_URL="https://github.com/xiaofangii2/XiaofangOS/archive/refs/heads/main.zip"
 ZIP_NAME="XiaofangOS-main.zip"
 UBUNTU_URL="https://github.com/xiaofangii2/XiaofangOS/releases/download/Ubuntu/Ubuntu.zip"
 UBUNTU_ZIP="Ubuntu.zip"
+CLI_URL="https://github.com/xiaofangii2/XiaofangOS/releases/download/XiaofangOS-CLI/XiaofangOS-CLI"
 PORT="2026"
+BIN_DIR="$HOME/bin"
+CLI_NAME="XiaofangOS-CLI"
 
 C_RESET="\033[0m"
 C_BOLD="\033[1m"
@@ -36,8 +39,10 @@ echo -e "  ${C_GREEN}3.${C_RESET} 建立目录结构"
 echo -e "  ${C_GREEN}4.${C_RESET} 从 GitHub 下载 XiaofangOS 主程序"
 echo -e "  ${C_GREEN}5.${C_RESET} 覆盖解压到目标目录"
 echo -e "  ${C_GREEN}6.${C_RESET} 下载并解压 Ubuntu 目录"
-echo -e "  ${C_GREEN}7.${C_RESET} 停掉旧服务器，启动新服务器"
-echo -e "  ${C_GREEN}8.${C_RESET} 自动打开浏览器"
+echo -e "  ${C_GREEN}7.${C_RESET} 下载 XiaofangOS-CLI 到 ~/bin"
+echo -e "  ${C_GREEN}8.${C_RESET} 把 ~/bin 写入 PATH（永久）"
+echo -e "  ${C_GREEN}9.${C_RESET} 停掉旧服务器，启动新服务器"
+echo -e "  ${C_GREEN}10.${C_RESET} 自动打开浏览器"
 echo ""
 
 echo -e "${C_CYAN}请问是否要为这台电脑（Android）安装 XiaofangOS？(y/n)${C_RESET}"
@@ -54,7 +59,7 @@ echo -e "${C_YELLOW}>>> 3 秒后开始安装...${C_RESET}"
 sleep 3
 echo ""
 
-echo -e "${C_BLUE}${C_BOLD}[1/8] 检查并安装依赖...${C_RESET}"
+echo -e "${C_BLUE}${C_BOLD}[1/10] 检查并安装依赖...${C_RESET}"
 if ! command -v php >/dev/null 2>&1; then
     echo -e "  ${C_YELLOW}未检测到 PHP，正在安装...${C_RESET}"
     pkg install -y php
@@ -80,24 +85,24 @@ else
 fi
 echo ""
 
-echo -e "${C_BLUE}${C_BOLD}[2/8] 申请存储权限...${C_RESET}"
+echo -e "${C_BLUE}${C_BOLD}[2/10] 申请存储权限...${C_RESET}"
 termux-setup-storage 2>/dev/null || true
 sleep 2
 echo -e "  ${C_GREEN}存储权限已申请${C_RESET}"
 echo ""
 
-echo -e "${C_BLUE}${C_BOLD}[3/8] 建立媒体目录...${C_RESET}"
+echo -e "${C_BLUE}${C_BOLD}[3/10] 建立媒体目录...${C_RESET}"
 mkdir -p "$MEDIA"
 echo -e "  ${C_GREEN}目录已就绪：$MEDIA${C_RESET}"
 echo ""
 
-echo -e "${C_BLUE}${C_BOLD}[4/8] 从 GitHub 下载 XiaofangOS 主程序...${C_RESET}"
+echo -e "${C_BLUE}${C_BOLD}[4/10] 从 GitHub 下载 XiaofangOS 主程序...${C_RESET}"
 cd "$MEDIA"
 curl -fL "$ZIP_URL" -o "$ZIP_NAME"
 echo -e "  ${C_GREEN}下载完成：$ZIP_NAME${C_RESET}"
 echo ""
 
-echo -e "${C_BLUE}${C_BOLD}[5/8] 覆盖解压到 $TARGET ...${C_RESET}"
+echo -e "${C_BLUE}${C_BOLD}[5/10] 覆盖解压到 $TARGET ...${C_RESET}"
 TMP_DIR="$MEDIA/XiaofangOS-main"
 if [ -d "$TMP_DIR" ]; then
     rm -rf "$TMP_DIR"
@@ -113,28 +118,62 @@ rm -rf "$TMP_DIR"
 echo -e "  ${C_GREEN}已覆盖到：$TARGET${C_RESET}"
 echo ""
 
-echo -e "${C_BLUE}${C_BOLD}[6/8] 下载并解压 Ubuntu 目录...${C_RESET}"
+echo -e "${C_BLUE}${C_BOLD}[6/10] 下载并解压 Ubuntu 目录...${C_RESET}"
 cd "$TARGET"
 curl -fL "$UBUNTU_URL" -o "$UBUNTU_ZIP"
 echo -e "  ${C_GREEN}下载完成：$UBUNTU_ZIP${C_RESET}"
-
-UBUNTU_TMP="$TARGET/.ubuntu-tmp"
-if [ -d "$UBUNTU_TMP" ]; then
-    rm -rf "$UBUNTU_TMP"
-fi
-mkdir -p "$UBUNTU_TMP"
-echo -e "  ${C_YELLOW}正在解压到临时目录...${C_RESET}"
-unzip -q -o "$UBUNTU_ZIP" -d "$UBUNTU_TMP"
+echo -e "  ${C_YELLOW}正在解压到 $TARGET ...${C_RESET}"
+unzip -q -o "$UBUNTU_ZIP" -d "$TARGET"
 rm -f "$UBUNTU_ZIP"
-
 if [ -d "$TARGET/Ubuntu" ]; then
-    rm -rf "$TARGET/Ubuntu"
+    echo -e "  ${C_GREEN}Ubuntu 目录已就位：$TARGET/Ubuntu${C_RESET}"
+else
+    echo -e "  ${C_RED}警告：解压后没有找到 Ubuntu 目录，请检查 Ubuntu.zip 内部结构${C_RESET}"
 fi
-mv "$UBUNTU_TMP" "$TARGET/Ubuntu"
-echo -e "  ${C_GREEN}Ubuntu 目录已就位：$TARGET/Ubuntu${C_RESET}"
 echo ""
 
-echo -e "${C_BLUE}${C_BOLD}[7/8] 停掉旧服务器，启动新服务器...${C_RESET}"
+echo -e "${C_BLUE}${C_BOLD}[7/10] 下载 XiaofangOS-CLI 到 ~/bin ...${C_RESET}"
+mkdir -p "$BIN_DIR"
+cd "$BIN_DIR"
+curl -fL "$CLI_URL" -o "$CLI_NAME"
+chmod +x "$CLI_NAME"
+echo -e "  ${C_GREEN}已下载：$BIN_DIR/$CLI_NAME${C_RESET}"
+echo ""
+
+echo -e "${C_BLUE}${C_BOLD}[8/10] 把 ~/bin 写入 PATH（永久）...${C_RESET}"
+BASHRC="$HOME/.bashrc"
+PROFILE="$HOME/.profile"
+PATH_LINE='export PATH="$HOME/bin:$PATH"'
+
+if [ -f "$BASHRC" ]; then
+    if ! grep -Fxq "$PATH_LINE" "$BASHRC"; then
+        echo "$PATH_LINE" >> "$BASHRC"
+        echo -e "  ${C_GREEN}已写入 ~/.bashrc${C_RESET}"
+    else
+        echo -e "  ${C_GREEN}~/.bashrc 已包含，跳过${C_RESET}"
+    fi
+else
+    echo "$PATH_LINE" > "$BASHRC"
+    echo -e "  ${C_GREEN}已创建 ~/.bashrc${C_RESET}"
+fi
+
+if [ -f "$PROFILE" ]; then
+    if ! grep -Fxq "$PATH_LINE" "$PROFILE"; then
+        echo "$PATH_LINE" >> "$PROFILE"
+        echo -e "  ${C_GREEN}已写入 ~/.profile${C_RESET}"
+    else
+        echo -e "  ${C_GREEN}~/.profile 已包含，跳过${C_RESET}"
+    fi
+else
+    echo "$PATH_LINE" > "$PROFILE"
+    echo -e "  ${C_GREEN}已创建 ~/.profile${C_RESET}"
+fi
+
+export PATH="$HOME/bin:$PATH"
+echo -e "  ${C_GREEN}当前会话 PATH 已更新${C_RESET}"
+echo ""
+
+echo -e "${C_BLUE}${C_BOLD}[9/10] 停掉旧服务器，启动新服务器...${C_RESET}"
 if pgrep -f "php -S 0.0.0.0:$PORT" >/dev/null 2>&1; then
     echo -e "  ${C_YELLOW}检测到旧服务器正在运行，正在停止...${C_RESET}"
     pkill -f "php -S 0.0.0.0:$PORT" 2>/dev/null || true
@@ -158,19 +197,25 @@ echo "=============================================="
 echo -e "${C_RESET}"
 
 echo -e "${C_WHITE}目录：${C_GREEN}$TARGET${C_RESET}"
+echo -e "${C_WHITE}CLI：${C_GREEN}$BIN_DIR/$CLI_NAME${C_RESET}"
 echo ""
 echo -e "${C_WHITE}访问地址：${C_CYAN}"
 echo "   http://127.0.0.1:$PORT/XiaofangOS.html"
 echo -e "   http://localhost:$PORT/XiaofangOS.html${C_RESET}"
 echo ""
 echo -e "${C_WHITE}以后启动：${C_RESET}"
+echo -e "  ${C_CYAN}XiaofangOS-CLI start${C_RESET}"
+echo -e "  或者："
 echo -e "  ${C_CYAN}cd $TARGET${C_RESET}"
 echo -e "  ${C_CYAN}php -S 0.0.0.0:$PORT${C_RESET}"
-echo -e "  或者后台跑："
-echo -e "  ${C_CYAN}nohup php -S 0.0.0.0:$PORT >/dev/null 2>&1 &${C_RESET}"
 echo ""
 echo -e "${C_WHITE}停止服务：${C_RESET}"
+echo -e "  ${C_CYAN}XiaofangOS-CLI exit${C_RESET}"
+echo -e "  或者："
 echo -e "  ${C_CYAN}pkill -f 'php -S'${C_RESET}"
+echo ""
+echo -e "${C_YELLOW}提示：新开一个 Termux 窗口，PATH 会自动生效${C_RESET}"
+echo -e "${C_YELLOW}     当前窗口可以直接用 ~/bin/XiaofangOS-CLI${C_RESET}"
 echo ""
 
 echo -e "${C_MAGENTA}3 秒后自动打开浏览器...${C_RESET}"
