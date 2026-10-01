@@ -1,7 +1,8 @@
 # XiaofangOS
 
-一个跑在浏览器里的迷你操作系统。纯 HTML + PHP，不需要编译、不需要安装 App。
+一个跑在浏览器里的迷你操作系统。纯 HTML + PHP，不需要编译。
 丢进手机目录就能用，自带桌面、此电脑、回收站、应用安装机制。
+如果是文盲的话可以使用安装工具
 
 ## 特性
 
@@ -13,10 +14,8 @@
 - 支持安装、卸载、版本对比、覆盖升级
 - 开机动画 + 重启动画，Cookie 判断首次启动
 - 兼容 Via、火狐、夸克、UC、Chrome 等主流浏览器
-- 壁纸自动读取 `.config/background/wallpaper.{jpg,png,svg,xml,webp}`
-
-## 已知已知bug
-目前已知完全修复
+- 壁纸自动读取 `.config/background/wallpaper.{jpg,png,svg,xml,webp}'
+- 浏览器兼容版本 支持127.0.0.1即可
 ## 目录结构
 com.xiaofang.os/
 ├── XiaofangOS.html
@@ -61,6 +60,7 @@ CC BY-NC-SA 4.0
 - 自由使用、修改、分发
 - 禁止商业使用
 - 修改后必须同协议开源
+- 为什么会使用这个协议(防止像Linux那样被卖了)
 
 详见 `LICENSE`。
 
@@ -84,5 +84,5 @@ CC BY-NC-SA 4.0
 详见 `LICENSE`。
 
 # 重要的事情说三遍
-# 目前已临时归档(以后可能会更新,但目前不会更新)
+# 
 ## 目前最后一次更新内容 deb 原生支持运行!!!

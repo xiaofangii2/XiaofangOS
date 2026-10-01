@@ -12,6 +12,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') exit(0);
 $ROOT = __DIR__;
 $action = $_GET['action'] ?? $_POST['action'] ?? '';
 error_log('=== api.php called action=' . $action . ' ===');
+#小更新
 error_log('GET=' . json_encode($_GET));
 function safe_path($root, $rel) {
     $rel = ltrim($rel, '/');
