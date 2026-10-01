@@ -233,3 +233,5 @@ fi
 echo ""
 echo -e "${C_GREEN}${C_BOLD}感谢使用 XiaofangOS！${C_RESET}"
 echo ""
+
+
