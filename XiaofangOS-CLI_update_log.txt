@@ -1,0 +1,21 @@
+XiaofangOS-CLI 2.0.0
+
+新增：
+- update 子命令，支持检查并更新自身和 XiaofangOS 主程序
+- update cli 子命令：从仓库拉取 version-XiaofangOS-CLI.txt 与本地版本比对
+- update XiaofangOS 子命令：从仓库拉取 version-XiaofangOS.txt 与本地版本比对
+- 支持拉取更新日志：XiaofangOS-CLI_update_log.txt、XiaofangOS_update_log.txt
+- 支持从 GitHub Release 下载新版 CLI 到 ~/bin/XiaofangOS-CLI
+- 版本比对使用 sort -V，支持语义化版本号
+
+变更：
+- 版本号从 1.0.0 升到 2.0.0
+- version 子命令同时输出 CLI 版本和 XiaofangOS 版本
+- help 子命令增加 update 用法说明
+
+修复：
+- 无
+
+已知问题：
+- update cli 下载依赖 GitHub Release 可访问
+- update XiaofangOS 只提示版本和日志，不自动下载主程序

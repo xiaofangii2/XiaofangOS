@@ -2,6 +2,9 @@
 
 ROOT="/storage/emulated/0/Android/media/com.xiaofang.os"
 PORT=2026
+CLI_VERSION="2.0.0"
+XIAOFANG_VERSION="7.0.0"
+RAW_BASE="https://raw.githubusercontent.com/xiaofangii2/XiaofangOS/main"
 
 start() {
     cd "$ROOT"
@@ -11,7 +14,8 @@ start() {
 }
 
 version() {
-    echo "XiaofangOS 5.0"
+    echo "XiaofangOS-CLI $CLI_VERSION"
+    echo "XiaofangOS $XIAOFANG_VERSION"
 }
 
 stop() {
@@ -19,13 +23,139 @@ stop() {
     echo "XiaofangOS 已停止"
 }
 
-help() {
-    echo "XiaofangOS 命令"
+fetch_text() {
+    local url="$1"
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL --max-time 20 "$url" 2>/dev/null
+    else
+        wget -q -O - "$url" 2>/dev/null
+    fi
+}
+
+compare_versions() {
+    local local_ver="$1"
+    local remote_ver="$2"
+    if [ "$local_ver" = "$remote_ver" ]; then
+        echo "same"
+    else
+        local lower
+        lower=$(printf '%s\n%s\n' "$local_ver" "$remote_ver" | sort -V | head -1)
+        if [ "$lower" = "$local_ver" ]; then
+            echo "older"
+        else
+            echo "newer"
+        fi
+    fi
+}
+
+update_cli() {
+    echo "正在检查 XiaofangOS-CLI 更新..."
+    local remote_ver
+    remote_ver=$(fetch_text "${RAW_BASE}/version-XiaofangOS-CLI.txt" | tr -d '[:space:]')
+    if [ -z "$remote_ver" ]; then
+        echo "无法访问至 GitHub"
+        return
+    fi
+    local cmp
+    cmp=$(compare_versions "$CLI_VERSION" "$remote_ver")
+    if [ "$cmp" = "same" ] || [ "$cmp" = "newer" ]; then
+        echo "XiaofangOS-CLI 已是最新版"
+        return
+    fi
+    echo "XiaofangOS-CLI 有更新：$CLI_VERSION -> $remote_ver"
     echo ""
-    echo "  start     启动 XiaofangOS"
-    echo "  version   显示版本"
-    echo "  exit      停止 XiaofangOS"
-    echo "  help      显示此帮助"
+    echo "更新日志："
+    echo "-------------------------------------------"
+    local log
+    log=$(fetch_text "${RAW_BASE}/XiaofangOS-CLI_update_log.txt")
+    if [ -z "$log" ]; then
+        echo "(无法获取更新日志)"
+    else
+        echo "$log"
+    fi
+    echo "-------------------------------------------"
+    echo ""
+    printf "是否下载新版？(y/n) "
+    read -r ans
+    if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
+        local cli_url="https://github.com/xiaofangii2/XiaofangOS/releases/download/XiaofangOS-CLI/XiaofangOS-CLI"
+        local bin_dir="$HOME/bin"
+        mkdir -p "$bin_dir"
+        if command -v curl >/dev/null 2>&1; then
+            curl -fL --max-time 60 "$cli_url" -o "$bin_dir/XiaofangOS-CLI"
+        else
+            wget -q "$cli_url" -O "$bin_dir/XiaofangOS-CLI"
+        fi
+        chmod +x "$bin_dir/XiaofangOS-CLI"
+        echo "已更新到 $bin_dir/XiaofangOS-CLI"
+    fi
+}
+
+update_xiaofang() {
+    echo "正在检查 XiaofangOS 更新..."
+    local remote_ver
+    remote_ver=$(fetch_text "${RAW_BASE}/version-XiaofangOS.txt" | tr -d '[:space:]')
+    if [ -z "$remote_ver" ]; then
+        echo "无法访问至 GitHub"
+        return
+    fi
+    local cmp
+    cmp=$(compare_versions "$XIAOFANG_VERSION" "$remote_ver")
+    if [ "$cmp" = "same" ] || [ "$cmp" = "newer" ]; then
+        echo "XiaofangOS 已是最新版"
+        return
+    fi
+    echo "XiaofangOS 有更新：$XIAOFANG_VERSION -> $remote_ver"
+    echo ""
+    echo "更新日志："
+    echo "-------------------------------------------"
+    local log
+    log=$(fetch_text "${RAW_BASE}/XiaofangOS_update_log.txt")
+    if [ -z "$log" ]; then
+        echo "(无法获取更新日志)"
+    else
+        echo "$log"
+    fi
+    echo "-------------------------------------------"
+    echo ""
+    printf "是否下载新版？(y/n) "
+    read -r ans
+    if [ "$ans" = "y" ] || [ "$ans" = "Y" ]; then
+        echo "请手动从 GitHub 下载 XiaofangOS 主程序，或重新运行 install.sh"
+    fi
+}
+
+update() {
+    if [ -z "$1" ]; then
+        echo "用法：XiaofangOS-CLI update <cli|XiaofangOS>"
+        return
+    fi
+    case "$1" in
+        cli)
+            update_cli
+            ;;
+        XiaofangOS)
+            update_xiaofang
+            ;;
+        *)
+            echo "未知目标：$1"
+            echo "用法：XiaofangOS-CLI update <cli|XiaofangOS>"
+            ;;
+    esac
+}
+
+help() {
+    echo "XiaofangOS-CLI $CLI_VERSION"
+    echo ""
+    echo "用法：XiaofangOS-CLI <命令>"
+    echo ""
+    echo "命令："
+    echo "  start                启动 XiaofangOS"
+    echo "  version              显示版本"
+    echo "  exit                 停止 XiaofangOS"
+    echo "  update cli           检查并更新 XiaofangOS-CLI"
+    echo "  update XiaofangOS    检查并更新 XiaofangOS"
+    echo "  help                 显示此帮助"
 }
 
 case "$1" in
@@ -37,6 +167,9 @@ case "$1" in
         ;;
     exit)
         stop
+        ;;
+    update)
+        update "$2"
         ;;
     help|"")
         help

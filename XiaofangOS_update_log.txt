@@ -1,0 +1,68 @@
+XiaofangOS 7.0.0
+
+新增：
+- daemon 脚本 xiaofang-daemon，监听 20260 端口，输出 "XiaofangOS daemon 已开启" 后持续运行
+- XiaofangOS-CLI 命令行管理工具，包含 start / version / exit / update / help
+- CLI 支持 update cli 与 update XiaofangOS 两个更新目标
+- 桌面图标增量刷新机制，刷新时复用已有 DOM，不再闪烁
+- 文件拖动：长按后拖动，可拖入文件夹、窗口、返回按钮
+- 右键菜单：长按 1 秒弹出，支持打开、安装、卸载、重命名、删除、属性、移动、复制、预览、用文本编辑器打开
+- 多选模式：长按 2 秒进入，支持全选、取消、批量删除、批量移动
+- 文件属性面板：名称、路径、类型、大小、修改时间、文件夹内文件数量
+- 文件预览器：文本、图片、音频、视频；文本支持等宽字体与复制，媒体内置播放器
+- 文本编辑器：内置保存、清空，保存直接写回原文件
+- 窗口右下角拖动改大小，手柄样式可见，支持触摸与鼠标
+- 窗口宽度自适应屏幕：桌面 480px、App 720px、终端 680px、预览 640px、编辑器 600px
+- 固定到开始菜单：App 图标右键可固定/取消固定，开始菜单显示"已固定"区域
+- 多语言切换：简体中文、English、日本語，桌面右键菜单入口
+- 开机动画：四色方块 + 白点跳动
+- 重启动画：旋转圈 + 正在重启文字
+- 关机动画：黑屏 + 白点跳动 + 正在关机文字
+- 终端点击唤起输入法：点击终端任意位置弹出软键盘，字符直接进入当前行
+- 终端历史命令：上下方向键调用历史
+- 终端支持 Ctrl+C 取消、Ctrl+L 清屏
+- xfpkg CLI 包管理器：list / install / remove / info / help
+- 包管理器 GUI com.xiaofang.pkgmgr：已安装 / 商店 两个 tab
+- 官方 App 打包脚本 build-apps.sh，用 cat / zip / mkdir / mv 生成 5 个 .xfapp
+- GUI 包管理器打包脚本 build-pkgmgr.sh
+- 官方 App 图标 SVG 源码（256x256）
+- install.sh 自动从 GitHub Release 下载 XiaofangOS-CLI 到 ~/bin
+- install.sh 自动把 ~/bin 永久写入 PATH（~/.bashrc 和 ~/.profile）
+
+修复：
+- 桌面图标刷新乱窜：改为增量对比
+- 空目录访问失败：api.php 的 list 分支区分 file_exists 与 is_dir
+- 卸载 App 后窗口仍可操作：卸载时关闭所有该 App 的窗口
+- 终端输入法不弹出：增加隐藏 input 与点击聚焦逻辑
+- 终端输出不可滚动：外层 overflow:hidden，滚动交给 terminal-output
+- 终端 ANSI 转义码显示为乱码：xfpkg 全部去掉颜色输出
+- 长按图标误触发打开：加入 suppressNextClick 标志
+- 桌面空白处滑动误拖动图标：加上判断起始点是否在图标上
+- xfpkg 参数混入：改成从 $@ 数组取值
+- xfpkg 下载进度条干扰输出：curl 加 -s 静默
+- xfpkg 404：URL 拼接与 GitHub Release 附件名统一为 .zip
+
+变更：
+- 默认端口从 25565 改为 2026
+- 后端 API 增加 move / copy / stat / cleanup / shell 五个 action
+- shell action 对 xfpkg 与 XiaofangOS 命令做 bash 前缀替换，绕过 /storage/emulated/0 的 noexec 限制
+- 包管理器安装逻辑改为直连 GitHub Release，<id>.zip 直接下载
+- cleanup 支持从 .config/recycle_days.txt 读取保留天数
+- 语言包格式从内嵌改为 assets/lang/*.json
+- main.js 与 style.css 拆分到 assets/ 目录
+- terminal.js 独立文件，通过 window.XiaofangOpenTerminal 暴露
+- 窗口标题格式统一为 "XiaofangOS - <标题>"
+
+移除：
+- store.json 依赖，xfpkg 不再需要本地或远程商店索引
+- 桌面 ghost 拖拽视觉，改为图标半透明 + 目标高亮
+
+已知问题：
+- 从 GitHub Release 拉包需要联网
+- Cloudflare Tunnel 在国内网络环境不稳定
+- 终端滚动需要手动长按
+- xfpkg 的 fallback URL 依赖 GitHub Release 附件名与 <id>.zip 一致
+- update XiaofangOS 只提示版本和日志，不自动下载主程序
+
+许可：
+CC BY-NC-SA 4.0
