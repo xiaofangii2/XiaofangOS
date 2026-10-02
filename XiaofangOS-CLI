@@ -1,26 +1,62 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 ROOT="/storage/emulated/0/Android/media/com.xiaofang.os"
-PORT=2026
-CLI_VERSION="2.0.0"
+CONFIG_FILE="$HOME/.xiaofangos.conf"
+CLI_VERSION="2.1.0"
 XIAOFANG_VERSION="7.0.0"
 RAW_BASE="https://raw.githubusercontent.com/xiaofangii2/XiaofangOS/main"
+
+# 读取端口配置
+if [ -f "$CONFIG_FILE" ]; then
+    PORT=$(cat "$CONFIG_FILE" | tr -d '[:space:]')
+fi
+if [ -z "$PORT" ]; then
+    PORT=2026
+fi
 
 start() {
     cd "$ROOT"
     pkill -f "php -S 0.0.0.0:$PORT" 2>/dev/null
     nohup php -S 0.0.0.0:$PORT >/dev/null 2>&1 &
+    sleep 1
     echo "XiaofangOS 已启动 (端口 $PORT)"
+    local URL="http://127.0.0.1:$PORT/XiaofangOS.html"
+    if command -v termux-open-url >/dev/null 2>&1; then
+        termux-open-url "$URL"
+    elif command -v am >/dev/null 2>&1; then
+        am start -a android.intent.action.VIEW -d "$URL" >/dev/null 2>&1 || true
+    fi
 }
 
 version() {
     echo "XiaofangOS-CLI $CLI_VERSION"
     echo "XiaofangOS $XIAOFANG_VERSION"
+    echo "端口 $PORT"
 }
 
 stop() {
     pkill -f "php -S 0.0.0.0:$PORT" 2>/dev/null
     echo "XiaofangOS 已停止"
+}
+
+set_port() {
+    if [ -z "$1" ]; then
+        echo "用法：XiaofangOS-CLI set <端口号>"
+        return
+    fi
+    case "$1" in
+        *[!0-9]*)
+            echo "端口号必须是数字"
+            return
+            ;;
+    esac
+    if [ "$1" -lt 1 ] || [ "$1" -gt 65535 ]; then
+        echo "端口号必须在 1-65535 之间"
+        return
+    fi
+    echo "$1" > "$CONFIG_FILE"
+    PORT="$1"
+    echo "端口已设置为 $PORT"
 }
 
 fetch_text() {
@@ -147,26 +183,35 @@ update() {
 help() {
     echo "XiaofangOS-CLI $CLI_VERSION"
     echo ""
-    echo "用法：XiaofangOS-CLI <命令>"
+    echo "用法：XiaofangOS-CLI <命令> [参数]"
     echo ""
     echo "命令："
-    echo "  start                启动 XiaofangOS"
-    echo "  version              显示版本"
-    echo "  exit                 停止 XiaofangOS"
+    echo "  start                启动 XiaofangOS 并打开浏览器"
+    echo "  stop                 停止 XiaofangOS"
+    echo "  set <端口号>         设置端口号（默认 2026）"
+    echo "  version              显示版本与当前端口"
     echo "  update cli           检查并更新 XiaofangOS-CLI"
     echo "  update XiaofangOS    检查并更新 XiaofangOS"
     echo "  help                 显示此帮助"
+    echo ""
+    echo "示例："
+    echo "  XiaofangOS-CLI start"
+    echo "  XiaofangOS-CLI set 8080"
+    echo "  XiaofangOS-CLI stop"
 }
 
 case "$1" in
     start)
         start
         ;;
+    stop)
+        stop
+        ;;
+    set)
+        set_port "$2"
+        ;;
     version)
         version
-        ;;
-    exit)
-        stop
         ;;
     update)
         update "$2"
